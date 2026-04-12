@@ -1,0 +1,63 @@
+[2026-03-25 21:53:12.752] [info] Updating Model file from 40000 to latest format...
+[2026-03-25 21:53:12.783] [info] Loaded model 3DGaitModel2354 from file C:\Users\Yeta\musculomove\backend\models\lower_limb.osim
+[2026-03-25 21:53:12.785] [warning] Couldn't find file 'sacrum.vtp'.
+[2026-03-25 21:53:12.785] [warning] Couldn't find file 'pelvis.vtp'.
+[2026-03-25 21:53:12.785] [warning] Couldn't find file 'l_pelvis.vtp'.
+[2026-03-25 21:53:12.786] [warning] Couldn't find file 'femur_r.vtp'.
+[2026-03-25 21:53:12.786] [warning] Couldn't find file 'tibia_r.vtp'.
+[2026-03-25 21:53:12.786] [warning] Couldn't find file 'fibula.vtp'.
+[2026-03-25 21:53:12.787] [warning] Couldn't find file 'talus.vtp'.
+[2026-03-25 21:53:12.787] [warning] Couldn't find file 'foot.vtp'.
+[2026-03-25 21:53:12.787] [warning] Couldn't find file 'bofoot.vtp'.
+[2026-03-25 21:53:12.788] [warning] Couldn't find file 'femur_l.vtp'.
+[2026-03-25 21:53:12.788] [warning] Couldn't find file 'tibia_l.vtp'.
+[2026-03-25 21:53:12.788] [warning] Couldn't find file 'l_fibula.vtp'.
+[2026-03-25 21:53:12.788] [warning] Couldn't find file 'l_talus.vtp'.
+[2026-03-25 21:53:12.789] [warning] Couldn't find file 'l_foot.vtp'.
+[2026-03-25 21:53:12.789] [warning] Couldn't find file 'l_bofoot.vtp'.
+[2026-03-25 21:53:12.789] [warning] Couldn't find file 'hat_spine.vtp'.
+[2026-03-25 21:53:12.789] [warning] Couldn't find file 'hat_jaw.vtp'.
+[2026-03-25 21:53:12.790] [warning] Couldn't find file 'hat_skull.vtp'.
+[2026-03-25 21:53:12.790] [warning] Couldn't find file 'hat_ribs.vtp'.
+[2026-03-25 21:58:06.913] [info] Updating Model file from 40000 to latest format...
+[2026-03-25 21:58:06.936] [info] Loaded model 3DGaitModel2354 from file C:\Users\Yeta\musculomove\backend\models\lower_limb.osim
+[2026-03-25 21:58:06.937] [warning] Couldn't find file 'sacrum.vtp'.
+[2026-03-25 21:58:06.938] [warning] Couldn't find file 'pelvis.vtp'.
+[2026-03-25 21:58:06.938] [warning] Couldn't find file 'l_pelvis.vtp'.
+[2026-03-25 21:58:06.938] [warning] Couldn't find file 'femur_r.vtp'.
+[2026-03-25 21:58:06.939] [warning] Couldn't find file 'tibia_r.vtp'.
+[2026-03-25 21:58:06.939] [warning] Couldn't find file 'fibula.vtp'.
+[2026-03-25 21:58:06.939] [warning] Couldn't find file 'talus.vtp'.
+[2026-03-25 21:58:06.939] [warning] Couldn't find file 'foot.vtp'.
+[2026-03-25 21:58:06.940] [warning] Couldn't find file 'bofoot.vtp'.
+[2026-03-25 21:58:06.940] [warning] Couldn't find file 'femur_l.vtp'.
+[2026-03-25 21:58:06.940] [warning] Couldn't find file 'tibia_l.vtp'.
+[2026-03-25 21:58:06.940] [warning] Couldn't find file 'l_fibula.vtp'.
+[2026-03-25 21:58:06.941] [warning] Couldn't find file 'l_talus.vtp'.
+[2026-03-25 21:58:06.941] [warning] Couldn't find file 'l_foot.vtp'.
+[2026-03-25 21:58:06.941] [warning] Couldn't find file 'l_bofoot.vtp'.
+[2026-03-25 21:58:06.941] [warning] Couldn't find file 'hat_spine.vtp'.
+[2026-03-25 21:58:06.942] [warning] Couldn't find file 'hat_jaw.vtp'.
+[2026-03-25 21:58:06.942] [warning] Couldn't find file 'hat_skull.vtp'.
+[2026-03-25 21:58:06.942] [warning] Couldn't find file 'hat_ribs.vtp'.
+[2026-03-26 19:42:12.234] [info] Updating Model file from 40000 to latest format...
+[2026-03-26 19:42:12.266] [info] Loaded model 3DGaitModel2354 from file C:\Users\Yeta\musculomove\backend\models\lower_limb.osim
+[2026-03-26 19:42:12.268] [warning] Couldn't find file 'sacrum.vtp'.
+[2026-03-26 19:42:12.268] [warning] Couldn't find file 'pelvis.vtp'.
+[2026-03-26 19:42:12.269] [warning] Couldn't find file 'l_pelvis.vtp'.
+[2026-03-26 19:42:12.269] [warning] Couldn't find file 'femur_r.vtp'.
+[2026-03-26 19:42:12.269] [warning] Couldn't find file 'tibia_r.vtp'.
+[2026-03-26 19:42:12.270] [warning] Couldn't find file 'fibula.vtp'.
+[2026-03-26 19:42:12.270] [warning] Couldn't find file 'talus.vtp'.
+[2026-03-26 19:42:12.270] [warning] Couldn't find file 'foot.vtp'.
+[2026-03-26 19:42:12.271] [warning] Couldn't find file 'bofoot.vtp'.
+[2026-03-26 19:42:12.271] [warning] Couldn't find file 'femur_l.vtp'.
+[2026-03-26 19:42:12.271] [warning] Couldn't find file 'tibia_l.vtp'.
+[2026-03-26 19:42:12.272] [warning] Couldn't find file 'l_fibula.vtp'.
+[2026-03-26 19:42:12.272] [warning] Couldn't find file 'l_talus.vtp'.
+[2026-03-26 19:42:12.272] [warning] Couldn't find file 'l_foot.vtp'.
+[2026-03-26 19:42:12.272] [warning] Couldn't find file 'l_bofoot.vtp'.
+[2026-03-26 19:42:12.273] [warning] Couldn't find file 'hat_spine.vtp'.
+[2026-03-26 19:42:12.273] [warning] Couldn't find file 'hat_jaw.vtp'.
+[2026-03-26 19:42:12.273] [warning] Couldn't find file 'hat_skull.vtp'.
+[2026-03-26 19:42:12.273] [warning] Couldn't find file 'hat_ribs.vtp'.
