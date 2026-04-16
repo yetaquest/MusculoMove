@@ -61,3 +61,35 @@
 [2026-03-26 19:42:12.273] [warning] Couldn't find file 'hat_jaw.vtp'.
 [2026-03-26 19:42:12.273] [warning] Couldn't find file 'hat_skull.vtp'.
 [2026-03-26 19:42:12.273] [warning] Couldn't find file 'hat_ribs.vtp'.
+[2026-04-12 23:54:39.472] [info] Updating Model file from 20001 to latest format...
+[2026-04-12 23:54:39.473] [warning] Model name 'TwoLegsHAT Arnold et al v2.1' contains whitespace.
+[2026-04-12 23:54:39.474] [warning] It was renamed to 'TwoLegsHATArnoldetalv2.1'.
+[2026-04-12 23:54:39.545] [info] Loaded model TwoLegsHATArnoldetalv2.1 from file C:\Users\Yeta\musculomove\backend\app\data\models\Arnoldetal2010_2Legs_Default_v2.1.osim
+[2026-04-12 23:54:40.062] [warning] GeometryPath 'path' has subcomponents with duplicate name 'pathwrap'. The duplicate is being renamed to 'pathwrap_0'.
+[2026-04-12 23:54:40.062] [warning] GeometryPath 'path' has subcomponents with duplicate name 'pathwrap'. The duplicate is being renamed to 'pathwrap_0'.
+[2026-04-12 23:54:40.063] [warning] GeometryPath 'path' has subcomponents with duplicate name 'pathwrap'. The duplicate is being renamed to 'pathwrap_0'.
+[2026-04-12 23:54:40.063] [warning] GeometryPath 'path' has subcomponents with duplicate name 'pathwrap'. The duplicate is being renamed to 'pathwrap_0'.
+[2026-04-16 12:05:28.734] [info] Updating Model file from 20001 to latest format...
+[2026-04-16 12:05:28.735] [warning] Model name 'TwoLegsHAT Arnold et al v2.1' contains whitespace.
+[2026-04-16 12:05:28.735] [warning] It was renamed to 'TwoLegsHATArnoldetalv2.1'.
+[2026-04-16 12:05:28.815] [info] Loaded model TwoLegsHATArnoldetalv2.1 from file C:/Users/Yeta/musculomove/backend/app/data/models/Arnoldetal2010_2Legs_Default_v2.1.osim
+[2026-04-16 12:05:29.301] [warning] GeometryPath 'path' has subcomponents with duplicate name 'pathwrap'. The duplicate is being renamed to 'pathwrap_0'.
+[2026-04-16 12:05:29.301] [warning] GeometryPath 'path' has subcomponents with duplicate name 'pathwrap'. The duplicate is being renamed to 'pathwrap_0'.
+[2026-04-16 12:05:29.302] [warning] GeometryPath 'path' has subcomponents with duplicate name 'pathwrap'. The duplicate is being renamed to 'pathwrap_0'.
+[2026-04-16 12:05:29.302] [warning] GeometryPath 'path' has subcomponents with duplicate name 'pathwrap'. The duplicate is being renamed to 'pathwrap_0'.
+[2026-04-16 12:06:37.929] [info] Updating Model file from 20001 to latest format...
+[2026-04-16 12:06:37.930] [warning] Model name 'TwoLegsHAT Arnold et al v2.1' contains whitespace.
+[2026-04-16 12:06:37.930] [warning] It was renamed to 'TwoLegsHATArnoldetalv2.1'.
+[2026-04-16 12:06:37.993] [info] Loaded model TwoLegsHATArnoldetalv2.1 from file C:\Users\Yeta\musculomove\backend\app\data\models\Arnoldetal2010_2Legs_Default_v2.1.osim
+[2026-04-16 12:06:38.285] [warning] GeometryPath 'path' has subcomponents with duplicate name 'pathwrap'. The duplicate is being renamed to 'pathwrap_0'.
+[2026-04-16 12:06:38.286] [warning] GeometryPath 'path' has subcomponents with duplicate name 'pathwrap'. The duplicate is being renamed to 'pathwrap_0'.
+[2026-04-16 12:06:38.287] [warning] GeometryPath 'path' has subcomponents with duplicate name 'pathwrap'. The duplicate is being renamed to 'pathwrap_0'.
+[2026-04-16 12:06:38.287] [warning] GeometryPath 'path' has subcomponents with duplicate name 'pathwrap'. The duplicate is being renamed to 'pathwrap_0'.
+[2026-04-16 12:07:49.828] [info] Updating Model file from 20001 to latest format...
+[2026-04-16 12:07:49.829] [warning] Model name 'TwoLegsHAT Arnold et al v2.1' contains whitespace.
+[2026-04-16 12:07:49.829] [warning] It was renamed to 'TwoLegsHATArnoldetalv2.1'.
+[2026-04-16 12:07:49.898] [info] Loaded model TwoLegsHATArnoldetalv2.1 from file C:\Users\Yeta\musculomove\backend\app\data\models\Arnoldetal2010_2Legs_Default_v2.1.osim
+[2026-04-16 12:07:50.186] [warning] GeometryPath 'path' has subcomponents with duplicate name 'pathwrap'. The duplicate is being renamed to 'pathwrap_0'.
+[2026-04-16 12:07:50.187] [warning] GeometryPath 'path' has subcomponents with duplicate name 'pathwrap'. The duplicate is being renamed to 'pathwrap_0'.
+[2026-04-16 12:07:50.188] [warning] GeometryPath 'path' has subcomponents with duplicate name 'pathwrap'. The duplicate is being renamed to 'pathwrap_0'.
+[2026-04-16 12:07:50.188] [warning] GeometryPath 'path' has subcomponents with duplicate name 'pathwrap'. The duplicate is being renamed to 'pathwrap_0'.
