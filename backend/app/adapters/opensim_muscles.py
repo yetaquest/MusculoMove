@@ -27,11 +27,12 @@ def read_muscle_outputs(
         muscle = muscles.get(actuator_name)
 
         max_iso = float(muscle.getMaxIsometricForce())
-        passive_force = float(muscle.getPassiveFiberForce(state))
-        passive_multiplier = float(muscle.getPassiveForceMultiplier(state))
+        passive_force = max(0.0, float(muscle.getPassiveFiberForce(state)))
+        passive_multiplier = max(0.0, float(muscle.getPassiveForceMultiplier(state)))
         norm_fiber_length = float(muscle.getNormalizedFiberLength(state))
         stiffness = float(muscle.getMuscleStiffness(state))
 
+        passive_force = max(0.0, passive_force)
         normalized_passive_force = passive_force / max_iso if max_iso > 0 else 0.0
 
         outputs.append(
