@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from app.services.optimization_service import solve_adapted_pose
-
 from app.services.optimization_service import (
-    solve_adapted_pose,
+    OPT_COORDS,
     objective_breakdown,
     pose_vector_from_dict,
+    solve_adapted_pose,
 )
 
 
@@ -19,42 +18,32 @@ def print_group(label: str, row: dict) -> None:
 
 
 def main() -> None:
+    tightness_settings = [
+        {
+            "muscle_group_id": "iliopsoas",
+            "severity": 0.75,
+            "max_shortening_fraction": 0.20,
+        }
+    ]
+
     result = solve_adapted_pose(
         selected_muscle_ids=["iliopsoas"],
-        tightness_settings=[
-            {
-                "muscle_group_id": "iliopsoas",
-                "severity": 0.75,
-                "max_shortening_fraction": 0.20,
-            }
-        ],
-        maxiter=15,
+        tightness_settings=tightness_settings,
+        maxiter=40,
     )
 
     baseline_breakdown = objective_breakdown(
         x=pose_vector_from_dict(result["base_pose_deg"]),
         base_pose_deg=result["base_pose_deg"],
         selected_muscle_ids=["iliopsoas"],
-        tightness_settings=[
-            {
-                "muscle_group_id": "iliopsoas",
-                "severity": 0.75,
-                "max_shortening_fraction": 0.20,
-            }
-        ],
+        tightness_settings=tightness_settings,
     )
 
     adapted_breakdown = objective_breakdown(
         x=pose_vector_from_dict(result["adapted_pose_deg"]),
         base_pose_deg=result["base_pose_deg"],
         selected_muscle_ids=["iliopsoas"],
-        tightness_settings=[
-            {
-                "muscle_group_id": "iliopsoas",
-                "severity": 0.75,
-                "max_shortening_fraction": 0.20,
-            }
-        ],
+        tightness_settings=tightness_settings,
     )
 
     print("\n=== OBJECTIVE BREAKDOWN: BASELINE ===")
@@ -75,6 +64,18 @@ def main() -> None:
     print("\n=== ADAPTED POSE ===")
     for k, v in result["adapted_pose_deg"].items():
         print(f"{k}: {v:.3f}")
+
+    print("\n=== POSE DELTAS (ADAPTED - BASE) ===")
+    for coord in OPT_COORDS:
+        base_val = result["base_pose_deg"][coord]
+        adapted_val = result["adapted_pose_deg"][coord]
+        delta = adapted_val - base_val
+        print(
+            f"{coord:<18} "
+            f"base={base_val:>8.3f}  "
+            f"adapted={adapted_val:>8.3f}  "
+            f"delta={delta:>8.3f}"
+        )
 
     baseline_group = result["baseline_eval"]["selected_groups"][0]
     adapted_group = result["adapted_eval"]["selected_groups"][0]

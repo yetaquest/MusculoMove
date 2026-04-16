@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable
+import math
 
 import numpy as np
 from scipy.optimize import minimize
@@ -31,7 +31,8 @@ def pose_vector_from_dict(pose_deg: dict[str, float]) -> np.ndarray:
 
 
 def pose_dict_from_vector(
-    x: np.ndarray, base_pose_deg: dict[str, float]
+    x: np.ndarray,
+    base_pose_deg: dict[str, float],
 ) -> dict[str, float]:
     pose = dict(base_pose_deg)
     for i, coord in enumerate(OPT_COORDS):
@@ -40,7 +41,7 @@ def pose_dict_from_vector(
 
 
 def bounds_from_spec(spec: dict) -> list[tuple[float, float]]:
-    bounds = []
+    bounds: list[tuple[float, float]] = []
     for coord in OPT_COORDS:
         lo, hi = spec["optimizer_bounds_deg"][coord]
         bounds.append((float(lo), float(hi)))
@@ -73,18 +74,18 @@ def objective_function(
     regularization = 0.0
     for coord, weight in REG_WEIGHTS.items():
         delta_deg = pose_deg[coord] - base_pose_deg[coord]
-        delta_rad = delta_deg * 3.141592653589793 / 180.0
+        delta_rad = math.radians(delta_deg)
         regularization += weight * (delta_rad**2)
 
     return selected_term + global_term + regularization
 
 
 def objective_breakdown(
-    x,
-    base_pose_deg,
-    selected_muscle_ids,
-    tightness_settings,
-):
+    x: np.ndarray,
+    base_pose_deg: dict[str, float],
+    selected_muscle_ids: list[str],
+    tightness_settings: list[dict],
+) -> dict[str, float]:
     pose_deg = pose_dict_from_vector(x, base_pose_deg)
 
     result = evaluate_pose(
@@ -105,14 +106,16 @@ def objective_breakdown(
     regularization = 0.0
     for coord, weight in REG_WEIGHTS.items():
         delta_deg = pose_deg[coord] - base_pose_deg[coord]
-        delta_rad = delta_deg * 3.141592653589793 / 180.0
+        delta_rad = math.radians(delta_deg)
         regularization += weight * (delta_rad**2)
 
+    total = selected_term + global_term + regularization
+
     return {
-        "selected_term": selected_term,
-        "global_term": global_term,
-        "regularization": regularization,
-        "total": selected_term + global_term + regularization,
+        "selected_term": float(selected_term),
+        "global_term": float(global_term),
+        "regularization": float(regularization),
+        "total": float(total),
     }
 
 
@@ -155,6 +158,20 @@ def solve_adapted_pose(
         tightness_settings=tightness_settings,
     )
 
+    baseline_breakdown = objective_breakdown(
+        x=pose_vector_from_dict(base_pose_deg),
+        base_pose_deg=base_pose_deg,
+        selected_muscle_ids=selected_muscle_ids,
+        tightness_settings=tightness_settings,
+    )
+
+    adapted_breakdown = objective_breakdown(
+        x=pose_vector_from_dict(adapted_pose_deg),
+        base_pose_deg=base_pose_deg,
+        selected_muscle_ids=selected_muscle_ids,
+        tightness_settings=tightness_settings,
+    )
+
     return {
         "success": bool(result.success),
         "message": str(result.message),
@@ -163,4 +180,6 @@ def solve_adapted_pose(
         "adapted_pose_deg": adapted_pose_deg,
         "baseline_eval": baseline_eval,
         "adapted_eval": adapted_eval,
+        "baseline_breakdown": baseline_breakdown,
+        "adapted_breakdown": adapted_breakdown,
     }

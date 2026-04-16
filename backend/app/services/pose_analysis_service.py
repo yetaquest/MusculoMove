@@ -40,6 +40,7 @@ def evaluate_pose(
     pose_deg: dict[str, float],
     selected_muscle_ids: list[str] | None = None,
     tightness_settings: list[dict] | None = None,
+    top_k_groups: int | None = None,
 ) -> dict:
     """
     Core backend evaluation for one pose.
@@ -48,6 +49,8 @@ def evaluate_pose(
       - pose_deg: pose values in degrees keyed by app coordinate ids
       - selected_muscle_ids: UI muscle group ids like ["iliopsoas"]
       - tightness_settings: list of settings dictionaries
+      - top_k_groups: if provided, only keep the top-k overall muscle groups
+                      in the returned "all_groups" list
 
     Returns:
       Plain Python dict ready to become JSON later.
@@ -84,7 +87,7 @@ def evaluate_pose(
         actuator_names=all_actuator_names(spec),
     )
 
-    grouped_outputs = aggregate_group_outputs(
+    grouped_outputs_full = aggregate_group_outputs(
         actuator_outputs=all_outputs,
         muscle_group_map=spec["muscle_groups"],
     )
@@ -100,8 +103,13 @@ def evaluate_pose(
     )
 
     selected_group_outputs = filter_selected_groups(
-        grouped_outputs, selected_muscle_ids
+        grouped_outputs_full, selected_muscle_ids
     )
+
+    if top_k_groups is not None:
+        grouped_outputs = grouped_outputs_full[:top_k_groups]
+    else:
+        grouped_outputs = grouped_outputs_full
 
     return {
         "model_name": model.getName(),
@@ -109,6 +117,8 @@ def evaluate_pose(
         "pose_deg": pose_deg,
         "selected_muscle_ids": selected_muscle_ids,
         "tightness_settings": tightness_settings,
+        "top_k_groups": top_k_groups,
+        "all_groups_total_count": len(grouped_outputs_full),
         "selected_groups": selected_group_outputs,
         "selected_actuators": selected_outputs,
         "all_groups": grouped_outputs,
