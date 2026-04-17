@@ -6,10 +6,13 @@ import io
 import json
 import math
 import os
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from collections import OrderedDict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
+from urllib.parse import urlparse
 import xml.etree.ElementTree as ET
 
 
@@ -295,6 +298,48 @@ def lower_body_muscle_names(groups: Mapping[str, Sequence[str]] | None = None) -
     resolved_groups = groups or build_lower_body_muscle_groups()
     names = sorted({muscle for members in resolved_groups.values() for muscle in members})
     return names
+
+
+def _humanize_identifier(identifier: str) -> str:
+    parts = identifier.replace(".", " ").replace("_", " ").split()
+    return " ".join(part.capitalize() for part in parts)
+
+
+def build_lower_body_muscle_catalog(
+    manifest: ModelManifest,
+    groups: Mapping[str, Sequence[str]] | None = None,
+) -> list[dict[str, Any]]:
+    resolved_groups = groups or build_lower_body_muscle_groups()
+    exact_muscles = lower_body_muscle_names(resolved_groups)
+    group_lookup: dict[str, list[str]] = {}
+    for group_name, members in resolved_groups.items():
+        for muscle_name in members:
+            group_lookup.setdefault(muscle_name, []).append(group_name)
+
+    base_names = sorted({muscle_name[:-2] for muscle_name in exact_muscles})
+    catalog: list[dict[str, Any]] = []
+    for base_name in base_names:
+        left_name = f"{base_name}_l"
+        right_name = f"{base_name}_r"
+        exact_targets = [name for name in (left_name, right_name) if name in manifest.muscles]
+        catalog.append(
+            {
+                "base_name": base_name,
+                "label": _humanize_identifier(base_name),
+                "sides": {
+                    "left": left_name if left_name in manifest.muscles else None,
+                    "right": right_name if right_name in manifest.muscles else None,
+                },
+                "groups": sorted(
+                    {
+                        group_name
+                        for exact_name in exact_targets
+                        for group_name in group_lookup.get(exact_name, [])
+                    }
+                ),
+            }
+        )
+    return catalog
 
 
 def outer_hard_bounds_from_manifest(manifest: ModelManifest) -> dict[str, tuple[float, float]]:
@@ -748,6 +793,11 @@ def manifest_summary(manifest: ModelManifest | None = None) -> dict[str, Any]:
             name: asdict(coordinate) for name, coordinate in resolved_manifest.coordinates.items()
         },
         "bodies": list(resolved_manifest.bodies.keys()),
+        "lower_body_muscles": lower_body_muscle_names(lower_body_groups),
+        "lower_body_muscle_catalog": build_lower_body_muscle_catalog(
+            resolved_manifest,
+            lower_body_groups,
+        ),
         "lower_body_groups": lower_body_groups,
         "inner_optimization_bounds_phase_1_rad": {
             name: list(bounds) for name, bounds in INNER_OPTIMIZATION_BOUNDS_PHASE_1.items()
@@ -771,6 +821,130 @@ def _print_json(payload: Mapping[str, Any]) -> None:
     print(json.dumps(payload, indent=2, sort_keys=True))
 
 
+def _load_json_bytes(rfile: Any, content_length: int) -> dict[str, Any]:
+    raw = rfile.read(content_length)
+    if not raw:
+        return {}
+    return json.loads(raw.decode("utf-8"))
+
+
+def build_api_payload(
+    *,
+    mode: str,
+    message: str,
+    payload: Mapping[str, Any],
+    running: bool = False,
+) -> dict[str, Any]:
+    response = dict(payload)
+    status = dict(response.get("status", {}))
+    status.update(
+        {
+            "mode": mode,
+            "message": message,
+            "running": running,
+            "phase": ACTIVE_OPTIMIZER_PHASE if mode == "optimize" else "evaluate",
+        }
+    )
+    response["status"] = status
+    return response
+
+
+def serve_api(host: str, port: int) -> int:
+    manifest = load_model_manifest()
+    validate_project_configuration(manifest)
+    evaluator = OpenSimEvaluator(manifest)
+    optimizer = PhaseOneOptimizer(evaluator)
+    manifest_payload = manifest_summary(manifest)
+
+    class MusculoMoveApiHandler(BaseHTTPRequestHandler):
+        server_version = "MusculoMoveAPI/0.1"
+
+        def log_message(self, format: str, *args: Any) -> None:
+            return
+
+        def _send_json(self, payload: Mapping[str, Any], status: HTTPStatus = HTTPStatus.OK) -> None:
+            data = json.dumps(payload).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_OPTIONS(self) -> None:  # noqa: N802
+            self._send_json({"ok": True}, HTTPStatus.NO_CONTENT)
+
+        def do_GET(self) -> None:  # noqa: N802
+            route = urlparse(self.path).path
+            if route in ("/health", "/api/health"):
+                self._send_json({"ok": True, "runtime": runtime_status()})
+                return
+            if route in ("/manifest", "/api/manifest"):
+                self._send_json(manifest_payload)
+                return
+            self._send_json(
+                {"error": f"Unknown route `{route}`."},
+                HTTPStatus.NOT_FOUND,
+            )
+
+        def do_POST(self) -> None:  # noqa: N802
+            route = urlparse(self.path).path
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+                data = _load_json_bytes(self.rfile, content_length)
+                if route in ("/evaluate", "/api/evaluate"):
+                    request = EvaluationRequest.from_mapping(data)
+                    payload = evaluator.evaluate_static_pose(request)
+                    self._send_json(
+                        build_api_payload(
+                            mode="evaluate",
+                            message="Static pose evaluated.",
+                            payload=payload,
+                        )
+                    )
+                    return
+                if route in ("/optimize", "/api/optimize"):
+                    request = OptimizationRequest.from_mapping(data)
+                    payload = optimizer.optimize(request)
+                    self._send_json(
+                        build_api_payload(
+                            mode="optimize",
+                            message="Phase-1 passive optimization complete.",
+                            payload=payload,
+                        )
+                    )
+                    return
+                self._send_json(
+                    {"error": f"Unknown route `{route}`."},
+                    HTTPStatus.NOT_FOUND,
+                )
+            except OpenSimRuntimeUnavailable as exc:
+                self._send_json(
+                    {
+                        "error": str(exc),
+                        "runtime": runtime_status(),
+                    },
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                )
+            except Exception as exc:
+                self._send_json(
+                    {"error": str(exc)},
+                    HTTPStatus.BAD_REQUEST,
+                )
+
+    server = ThreadingHTTPServer((host, port), MusculoMoveApiHandler)
+    print(f"MusculoMove API listening on http://{host}:{port}")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -788,6 +962,10 @@ def build_parser() -> argparse.ArgumentParser:
     optimize = subparsers.add_parser("optimize", help="Run the phase-1 passive optimizer from JSON.")
     optimize.add_argument("--request", required=True, type=Path, help="Path to an optimization JSON file.")
 
+    serve = subparsers.add_parser("serve", help="Run a small HTTP API for the frontend.")
+    serve.add_argument("--host", default="127.0.0.1", help="Bind host. Defaults to 127.0.0.1.")
+    serve.add_argument("--port", default=8000, type=int, help="Bind port. Defaults to 8000.")
+
     return parser
 
 
@@ -804,6 +982,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
 
         evaluator = OpenSimEvaluator(manifest)
+        if args.command == "serve":
+            return serve_api(args.host, args.port)
+
         if args.command == "evaluate":
             request = EvaluationRequest.from_mapping(_read_json(args.request))
             _print_json(evaluator.evaluate_static_pose(request))

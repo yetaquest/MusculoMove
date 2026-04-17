@@ -30,3 +30,4 @@ uv run --cache-dir /tmp/uv-cache python main.py optimize --request path/to/reque
 
 Detailed review notes for this implementation live in [docs/implementation-review.md](/home/etekmen13/projects/MusculoMove/docs/implementation-review.md).
 Exact product usage instructions and example request files live in [docs/how-to-use.md](/home/etekmen13/projects/MusculoMove/docs/how-to-use.md).
+Frontend run instructions live in [docs/frontend-how-to-use.md](/home/etekmen13/projects/MusculoMove/docs/frontend-how-to-use.md).
