@@ -1,0 +1,24 @@
+{
+  "tightness": [
+    {
+      "targets": [
+        "hamstrings_r"
+      ],
+      "severity": 0.6,
+      "max_shortening_fraction": 0.2
+    }
+  ],
+  "selected_groups": [
+    "hamstrings_r"
+  ],
+  "seed_pose": {
+    "pelvis_tilt": 0.0,
+    "lumbar_extension": 0.0,
+    "hip_flexion_r": 0.0,
+    "knee_angle_r": 0.0,
+    "ankle_angle_r": 0.0
+  },
+  "max_iterations": 8,
+  "initial_step_rad": 0.08726646259971647,
+  "tolerance_rad": 0.008726646259971648
+}

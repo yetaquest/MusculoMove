@@ -1,0 +1,23 @@
+{
+  "pose": {
+    "pelvis_tilt": -0.05,
+    "lumbar_extension": 0.03,
+    "hip_flexion_r": 0.17,
+    "knee_angle_r": 0.09,
+    "ankle_angle_r": -0.03
+  },
+  "tightness": [
+    {
+      "targets": [
+        "hamstrings_r"
+      ],
+      "severity": 0.6,
+      "max_shortening_fraction": 0.2
+    }
+  ],
+  "selected_groups": [
+    "hamstrings_r",
+    "plantarflexors_r"
+  ],
+  "include_upper_body_debug_metrics": false
+}
