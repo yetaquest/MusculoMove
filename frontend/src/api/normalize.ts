@@ -24,6 +24,16 @@ export function normalizeManifestResponse(raw: unknown): NormalizedManifest {
         right: string | null
       }
     }>
+    viewer: {
+      asset_url: string
+      model_path: string
+      geometry_path: string
+      body_nodes: Record<string, string>
+      runtime: {
+        available: boolean
+        error?: string
+      }
+    }
   }
 
   const muscleCatalog: MuscleCatalogEntry[] = data.lower_body_muscle_catalog.map((entry) => ({
@@ -38,6 +48,13 @@ export function normalizeManifestResponse(raw: unknown): NormalizedManifest {
     lowerBodyGroups: data.lower_body_groups,
     lowerBodyMuscles: data.lower_body_muscles,
     muscleCatalog,
+    viewer: {
+      assetUrl: data.viewer.asset_url,
+      modelPath: data.viewer.model_path,
+      geometryPath: data.viewer.geometry_path,
+      bodyNodes: data.viewer.body_nodes,
+      runtime: data.viewer.runtime,
+    },
   }
 }
 

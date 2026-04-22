@@ -2,21 +2,21 @@
 
 :root {
   color-scheme: light;
-  --background: #f5efe3;
+  --background: #f4eddf;
   --surface: #fffaf1;
   --surface-strong: #f4eadb;
-  --surface-deep: #efe3d1;
+  --surface-deep: #eee2cf;
   --ink: #1f241f;
   --muted: #5f685f;
-  --border: rgba(56, 70, 60, 0.14);
+  --border: rgba(56, 70, 60, 0.12);
   --accent: #1f7a74;
   --accent-strong: #125752;
   --accent-soft: rgba(31, 122, 116, 0.14);
   --warn: #c7652f;
   --danger: #b14d39;
   --shadow:
-    0 28px 90px rgba(34, 44, 38, 0.08),
-    0 10px 30px rgba(34, 44, 38, 0.06);
+    0 22px 70px rgba(34, 44, 38, 0.07),
+    0 8px 22px rgba(34, 44, 38, 0.05);
   --grid-shadow: rgba(31, 36, 31, 0.04);
   --sans: 'Space Grotesk', 'Avenir Next', 'Trebuchet MS', sans-serif;
   --serif: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', serif;
@@ -41,9 +41,9 @@ body,
 body {
   margin: 0;
   background:
-    radial-gradient(circle at top left, rgba(31, 122, 116, 0.2), transparent 34%),
-    radial-gradient(circle at top right, rgba(199, 101, 47, 0.18), transparent 28%),
-    linear-gradient(180deg, #f9f3e8 0%, #f1e8d9 100%);
+    radial-gradient(circle at top left, rgba(31, 122, 116, 0.12), transparent 30%),
+    radial-gradient(circle at top right, rgba(199, 101, 47, 0.1), transparent 24%),
+    linear-gradient(180deg, #f8f2e7 0%, #f1e8d8 100%);
   color: var(--ink);
 }
 
@@ -60,19 +60,6 @@ select {
 .musculomove-shell {
   position: relative;
   min-height: 100svh;
-  overflow: hidden;
-}
-
-.musculomove-shell::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(var(--grid-shadow) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-shadow) 1px, transparent 1px);
-  background-size: 64px 64px;
-  opacity: 0.6;
-  pointer-events: none;
 }
 
 .range-input {

@@ -3,9 +3,13 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import importlib
 import json
 import math
 import os
+import sys
+import tempfile
+import threading
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from collections import OrderedDict
@@ -19,6 +23,10 @@ import xml.etree.ElementTree as ET
 REPO_ROOT = Path(__file__).resolve().parent
 ACTIVE_MODEL_PATH = REPO_ROOT / "models" / "RajagopalLaiUhlrich2023.osim"
 ACTIVE_MODEL_RELATIVE_PATH = "models/RajagopalLaiUhlrich2023.osim"
+ACTIVE_MODEL_GEOMETRY_PATH = REPO_ROOT / "models" / "FullBodyModel-4.0" / "Geometry"
+ACTIVE_MODEL_GEOMETRY_RELATIVE_PATH = "models/FullBodyModel-4.0/Geometry"
+VIEWER_BACKEND_PATH = REPO_ROOT / "tools" / "opensim-viewer-backend"
+VIEWER_MODEL_ROUTE = "/api/viewer/model.gltf"
 LOWER_BODY_ANALYSIS_CUTOFF = "below the torso"
 GLOBAL_OBJECTIVE_WEIGHT = 0.10
 ACTIVE_OPTIMIZER_PHASE = "ACTIVE OPTIMIZER PHASE 1"
@@ -221,6 +229,10 @@ class OpenSimRuntimeUnavailable(RuntimeError):
     pass
 
 
+class ViewerAssetUnavailable(RuntimeError):
+    pass
+
+
 @contextlib.contextmanager
 def suppress_native_output():
     stdout_fd = os.dup(1)
@@ -269,6 +281,8 @@ def load_model_manifest(model_path: Path = ACTIVE_MODEL_PATH) -> ModelManifest:
 
     bodies: dict[str, BodyInfo] = {}
     for element in root.findall(".//BodySet/objects/Body"):
+        if element.attrib["name"] == "ground":
+            continue
         body = BodyInfo(name=element.attrib["name"])
         bodies[body.name] = body
 
@@ -416,6 +430,135 @@ def runtime_status() -> dict[str, Any]:
         "available": True,
         "module_version": getattr(opensim, "__version__", "unknown"),
         "opensim_version": getattr(opensim, "__opensim_version__", "unknown"),
+    }
+
+
+def _prepare_opensim_compat_module(opensim: Any) -> Any:
+    alias_sources = (
+        getattr(opensim, "simbody", None),
+        getattr(opensim, "common", None),
+        getattr(opensim, "simulation", None),
+        getattr(opensim, "actuators", None),
+        getattr(opensim, "tools", None),
+    )
+    required_aliases = (
+        "ArrayDecorativeGeometry",
+        "CoordinateAxis",
+        "DecorativeGeometry",
+        "DecorativeGeometryImplementation",
+        "Mat33",
+        "ModelVisualizer",
+        "PolygonalMesh",
+        "Quaternion",
+        "StatesTrajectory",
+        "TimeSeriesTable",
+        "TimeSeriesTableVec3",
+        "UnitVec3",
+    )
+    for alias in required_aliases:
+        if hasattr(opensim, alias):
+            continue
+        for source in alias_sources:
+            if source is not None and hasattr(source, alias):
+                setattr(opensim, alias, getattr(source, alias))
+                break
+    return opensim
+
+
+_viewer_asset_cache: dict[str, Any] = {}
+_viewer_asset_lock = threading.Lock()
+
+
+def _viewer_body_node_map(manifest: ModelManifest) -> dict[str, str]:
+    return {body_name: f"Body:/bodyset/{body_name}" for body_name in manifest.bodies}
+
+
+def viewer_runtime_status() -> dict[str, Any]:
+    if not VIEWER_BACKEND_PATH.exists():
+        return {
+            "available": False,
+            "error": f"Viewer backend not found at {VIEWER_BACKEND_PATH}.",
+        }
+
+    try:
+        import pygltflib  # noqa: F401
+    except ModuleNotFoundError as exc:
+        return {
+            "available": False,
+            "error": "pygltflib is not installed. Run `uv sync --cache-dir /tmp/uv-cache` first.",
+        }
+
+    try:
+        status = runtime_status()
+        if not status["available"]:
+            return {
+                "available": False,
+                "error": status["error"],
+            }
+    except Exception as exc:  # pragma: no cover - defensive status path
+        return {
+            "available": False,
+            "error": str(exc),
+        }
+
+    return {
+        "available": True,
+        "model_path": ACTIVE_MODEL_RELATIVE_PATH,
+        "geometry_path": ACTIVE_MODEL_GEOMETRY_RELATIVE_PATH,
+    }
+
+
+def _load_viewer_backend_converter() -> tuple[Any, Any]:
+    status = viewer_runtime_status()
+    if not status["available"]:
+        raise ViewerAssetUnavailable(status["error"])
+
+    compat_opensim = _prepare_opensim_compat_module(get_opensim_module())
+    sys.modules["opensim"] = compat_opensim
+    viewer_backend_import_path = str(VIEWER_BACKEND_PATH)
+    if viewer_backend_import_path not in sys.path:
+        sys.path.insert(0, viewer_backend_import_path)
+
+    try:
+        options_module = importlib.import_module("osimViewerOptions")
+        converters_module = importlib.import_module("osimConverters.convertOsim2Gltf")
+    except ModuleNotFoundError as exc:
+        raise ViewerAssetUnavailable(str(exc)) from exc
+
+    return converters_module.convertOsim2Gltf, options_module
+
+
+def _generate_viewer_gltf_bytes() -> bytes:
+    convert_osim_to_gltf, viewer_options_module = _load_viewer_backend_converter()
+    options = viewer_options_module.osimViewerOptions()
+    options.setShowMuscles(False)
+    with suppress_native_output():
+        gltf = convert_osim_to_gltf(
+            str(ACTIVE_MODEL_PATH),
+            str(ACTIVE_MODEL_GEOMETRY_PATH),
+            [],
+            options,
+        )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        output_path = Path(temp_dir) / "viewer-model.gltf"
+        gltf.save(str(output_path))
+        return output_path.read_bytes()
+
+
+def get_viewer_asset(manifest: ModelManifest | None = None) -> dict[str, Any]:
+    resolved_manifest = manifest or load_model_manifest()
+    with _viewer_asset_lock:
+        cached_bytes = _viewer_asset_cache.get("gltf_bytes")
+        if cached_bytes is None:
+            cached_bytes = _generate_viewer_gltf_bytes()
+            _viewer_asset_cache["gltf_bytes"] = cached_bytes
+
+    return {
+        "bytes": cached_bytes,
+        "content_type": "model/gltf+json; charset=utf-8",
+        "model_url": VIEWER_MODEL_ROUTE,
+        "body_nodes": _viewer_body_node_map(resolved_manifest),
     }
 
 
@@ -655,7 +798,7 @@ class OpenSimEvaluator:
                 for name, metric in self._read_upper_body_debug_muscle_outputs(model, state).items()
             }
             debug["upper_body_debug_note"] = (
-                "RajagopalLaiUhlrich2023 primarily models the upper body with torque actuators, "
+                "The active FullBodyModel primarily models the upper body with torque actuators, "
                 "so this debug payload is expected to be empty for muscle metrics."
             )
 
@@ -810,6 +953,13 @@ def manifest_summary(manifest: ModelManifest | None = None) -> dict[str, Any]:
             for name, info in resolved_manifest.forces.items()
             if not name.endswith(("_r", "_l")) or name.startswith(("arm_", "elbow_", "wrist_", "pro_sup_"))
         },
+        "viewer": {
+            "asset_url": VIEWER_MODEL_ROUTE,
+            "body_nodes": _viewer_body_node_map(resolved_manifest),
+            "model_path": ACTIVE_MODEL_RELATIVE_PATH,
+            "geometry_path": ACTIVE_MODEL_GEOMETRY_RELATIVE_PATH,
+            "runtime": viewer_runtime_status(),
+        },
     }
 
 
@@ -873,21 +1023,51 @@ def serve_api(host: str, port: int) -> int:
             self.end_headers()
             self.wfile.write(data)
 
+        def _send_bytes(
+            self,
+            payload: bytes,
+            *,
+            content_type: str,
+            status: HTTPStatus = HTTPStatus.OK,
+        ) -> None:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.end_headers()
+            self.wfile.write(payload)
+
         def do_OPTIONS(self) -> None:  # noqa: N802
             self._send_json({"ok": True}, HTTPStatus.NO_CONTENT)
 
         def do_GET(self) -> None:  # noqa: N802
             route = urlparse(self.path).path
-            if route in ("/health", "/api/health"):
-                self._send_json({"ok": True, "runtime": runtime_status()})
-                return
-            if route in ("/manifest", "/api/manifest"):
-                self._send_json(manifest_payload)
-                return
-            self._send_json(
-                {"error": f"Unknown route `{route}`."},
-                HTTPStatus.NOT_FOUND,
-            )
+            try:
+                if route in ("/health", "/api/health"):
+                    self._send_json({"ok": True, "runtime": runtime_status()})
+                    return
+                if route in ("/manifest", "/api/manifest"):
+                    self._send_json(manifest_payload)
+                    return
+                if route in (VIEWER_MODEL_ROUTE, VIEWER_MODEL_ROUTE.removeprefix("/api")):
+                    asset = get_viewer_asset(manifest)
+                    self._send_bytes(asset["bytes"], content_type=asset["content_type"])
+                    return
+                self._send_json(
+                    {"error": f"Unknown route `{route}`."},
+                    HTTPStatus.NOT_FOUND,
+                )
+            except (OpenSimRuntimeUnavailable, ViewerAssetUnavailable) as exc:
+                self._send_json(
+                    {
+                        "error": str(exc),
+                        "runtime": runtime_status(),
+                        "viewer_runtime": viewer_runtime_status(),
+                    },
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                )
 
         def do_POST(self) -> None:  # noqa: N802
             route = urlparse(self.path).path
@@ -920,11 +1100,12 @@ def serve_api(host: str, port: int) -> int:
                     {"error": f"Unknown route `{route}`."},
                     HTTPStatus.NOT_FOUND,
                 )
-            except OpenSimRuntimeUnavailable as exc:
+            except (OpenSimRuntimeUnavailable, ViewerAssetUnavailable) as exc:
                 self._send_json(
                     {
                         "error": str(exc),
                         "runtime": runtime_status(),
+                        "viewer_runtime": viewer_runtime_status(),
                     },
                     HTTPStatus.SERVICE_UNAVAILABLE,
                 )

@@ -26,11 +26,23 @@ export type MuscleCatalogEntry = {
   }
 }
 
+export type ViewerConfig = {
+  assetUrl: string
+  modelPath: string
+  geometryPath: string
+  bodyNodes: Record<string, string>
+  runtime: {
+    available: boolean
+    error?: string
+  }
+}
+
 export type NormalizedManifest = {
   bodies: string[]
   lowerBodyGroups: Record<string, string[]>
   lowerBodyMuscles: string[]
   muscleCatalog: MuscleCatalogEntry[]
+  viewer: ViewerConfig
 }
 
 export type NormalizedPoseResponse = {

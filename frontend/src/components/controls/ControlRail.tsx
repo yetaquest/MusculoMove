@@ -1,6 +1,6 @@
 import { useDeferredValue, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Minus, Play, RotateCcw, Search, Sparkles } from 'lucide-react'
+import { Minus, Play, RotateCcw, Search } from 'lucide-react'
 import type { ActiveMuscleSelection, MuscleCatalogEntry, SideOption } from '../../types/api'
 import { Button } from '../ui/button'
 import { Card } from '../ui/card'
@@ -62,16 +62,34 @@ export function ControlRail({
   return (
     <div className="flex flex-col gap-4">
       <Card className="p-5">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent-strong)]">
+            Quick Start
+          </p>
+          <p className="mt-2 font-[var(--serif)] text-xl text-[var(--ink)]">How to use the posture sandbox</p>
+        </div>
+
+        <div className="mt-4 rounded-[22px] border border-[var(--border)] bg-white/80 p-4 text-sm text-[var(--muted)]">
+          <ol className="space-y-3">
+            <li>1. Add one or two lower-body muscles from the list below.</li>
+            <li>2. Set side and severity, then use `Preview current sliders` or let live preview update.</li>
+            <li>3. Press `Optimize` to solve the current passive compensation pose and inspect the model output.</li>
+          </ol>
+        </div>
+
+        <div className="mt-4 rounded-[22px] bg-[var(--accent-soft)] px-4 py-3 text-sm text-[var(--ink)]">
+          Example: tighten `iliacus` and `psoas` on the right at `0.60`, preview the pose, then run
+          `Optimize` and compare the pelvis and hip posture in the viewport.
+        </div>
+      </Card>
+
+      <Card className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="font-[var(--serif)] text-2xl text-[var(--ink)]">Muscle tightness studio</p>
+            <p className="font-[var(--serif)] text-2xl text-[var(--ink)]">Lower-body tightness</p>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              Select individual lower-body muscles, choose a side, then press Optimize to compute a passive
-              compensation pose.
+              Add lower-body muscles, choose a side, then evaluate or optimize the passive scenario.
             </p>
-          </div>
-          <div className="rounded-full bg-[var(--accent-soft)] p-3 text-[var(--accent-strong)]">
-            <Sparkles className="size-5" />
           </div>
         </div>
 
@@ -87,16 +105,19 @@ export function ControlRail({
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          {featuredEntries.map((entry) => (
-            <button
-              key={entry.baseName}
-              onClick={() => addSelection(entry.baseName)}
-              className="rounded-full border border-[var(--border)] bg-[var(--surface-strong)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--ink)] transition hover:border-[var(--accent)] hover:bg-white"
-            >
-              {entry.label}
-            </button>
-          ))}
+        <div className="mt-5">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Quick add</p>
+          <div className="flex flex-wrap gap-2">
+            {featuredEntries.map((entry) => (
+              <button
+                key={entry.baseName}
+                onClick={() => addSelection(entry.baseName)}
+                className="rounded-full border border-[var(--border)] bg-[var(--surface-strong)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--ink)] transition hover:border-[var(--accent)] hover:bg-white"
+              >
+                {entry.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="mt-5 max-h-60 overflow-auto rounded-[24px] border border-[var(--border)] bg-[var(--surface-strong)] p-2">
@@ -125,7 +146,7 @@ export function ControlRail({
           <div>
             <p className="font-[var(--serif)] text-xl text-[var(--ink)]">Active selections</p>
             <p className="text-sm text-[var(--muted)]">
-              Evaluate updates muscle metrics continuously. Optimize recomputes the pose explicitly.
+              Preview updates the current passive scenario. Optimize solves the phase-1 pose.
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={clearSelections}>
@@ -152,7 +173,7 @@ export function ControlRail({
                   <div>
                     <p className="font-medium text-[var(--ink)]">{selection.baseName}</p>
                     <p className="text-xs uppercase tracking-[0.14em] text-[var(--muted)]">
-                      alpha fixed at {selection.maxShorteningFraction.toFixed(2)}
+                      Max shortening fraction {selection.maxShorteningFraction.toFixed(2)}
                     </p>
                   </div>
                   <Button variant="ghost" size="sm" onClick={() => removeSelection(selection.id)}>

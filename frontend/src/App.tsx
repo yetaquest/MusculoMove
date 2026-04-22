@@ -1,7 +1,7 @@
 import { startTransition, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
-import { fetchManifest, fetchSampleResponse, postEvaluate, postOptimize, probeAvatarAsset } from './api/client'
+import { fetchManifest, fetchSampleResponse, postEvaluate, postOptimize } from './api/client'
 import { normalizeManifestResponse, normalizePoseResponse } from './api/normalize'
 import { ControlRail } from './components/controls/ControlRail'
 import { DebugPanel } from './components/debug/DebugPanel'
@@ -85,22 +85,16 @@ function App() {
   const setDebugOpen = useAppStore((state) => state.setDebugOpen)
   const setSelectedSegment = useAppStore((state) => state.setSelectedSegment)
   const setViewerMode = useAppStore((state) => state.setViewerMode)
-  const [avatarAvailable, setAvatarAvailable] = useState(false)
   const [appliedSegments, setAppliedSegments] = useState<Record<string, AppliedSegmentInfo>>({})
 
   useEffect(() => {
     let active = true
     async function boot() {
       try {
-        const [sampleRaw, avatarProbe] = await Promise.all([
-          fetchSampleResponse(),
-          probeAvatarAsset(),
-        ])
+        const sampleRaw = await fetchSampleResponse()
         if (!active) {
           return
         }
-        setAvatarAvailable(avatarProbe)
-        setViewerMode(avatarProbe ? 'avatar' : 'debug')
         setSampleResponse(normalizePoseResponse(sampleRaw, 'sample'))
       } catch {
         if (!active) {
@@ -115,7 +109,9 @@ function App() {
           return
         }
         startTransition(() => {
-          setManifest(normalizeManifestResponse(manifestRaw))
+          const normalizedManifest = normalizeManifestResponse(manifestRaw)
+          setManifest(normalizedManifest)
+          setViewerMode(normalizedManifest.viewer.runtime.available ? 'opensim' : 'debug')
         })
         await requestEvaluate()
       } catch (error) {
@@ -150,8 +146,12 @@ function App() {
   return (
     <div className="musculomove-shell">
       <main className="relative z-10 mx-auto max-w-[1680px] px-4 py-4 lg:px-6 lg:py-6">
-        <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)_360px]">
-          <motion.section initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }}>
+        <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <motion.section
+            initial={{ opacity: 0, x: -12 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="xl:sticky xl:top-6 xl:self-start"
+          >
             <ControlRail
               catalog={manifest?.muscleCatalog ?? []}
               selections={activeSelections}
@@ -161,7 +161,7 @@ function App() {
               updateSelection={updateSelection}
               removeSelection={removeSelection}
               clearSelections={() => {
-              clearSelections()
+                clearSelections()
                 void requestEvaluate()
               }}
               optimize={() => void requestOptimize()}
@@ -174,20 +174,31 @@ function App() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
-            <div className="rounded-[32px] border border-[var(--border)] bg-[var(--surface)]/80 px-6 py-5 shadow-[var(--shadow)] backdrop-blur">
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+            <div className="rounded-[28px] border border-[var(--border)] bg-[var(--surface)]/88 px-5 py-5 shadow-[var(--shadow)] backdrop-blur">
+              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent-strong)]">
-                    MusculoMove
+                    Viewer
                   </p>
-                  <h1 className="mt-2 max-w-3xl font-[var(--serif)] text-4xl leading-[1.02] tracking-[-0.04em] text-[var(--ink)] lg:text-6xl">
-                    Full-body passive accommodation, viewed as a live 3D posture experiment.
+                  <h1 className="mt-2 max-w-3xl font-[var(--serif)] text-3xl leading-[1.04] tracking-[-0.04em] text-[var(--ink)] lg:text-5xl">
+                    Passive posture output with a cleaner full-body viewport.
                   </h1>
                 </div>
-                <p className="max-w-sm text-sm leading-6 text-[var(--muted)]">
-                  The viewer keeps the full-body rig in frame, while the controls stay focused on lower-body
-                  muscle-property tightening. Use Optimize to solve the phase-1 compensation subset.
-                </p>
+                <div className="flex items-center gap-3">
+                  <div className="hidden rounded-full border border-[var(--border)] bg-white/80 px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)] sm:block">
+                    Lower-body controls only
+                  </div>
+                  <button
+                    onClick={() => setDebugOpen(!debugOpen)}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                      debugOpen
+                        ? 'bg-[var(--accent)] text-white'
+                        : 'border border-[var(--border)] bg-white text-[var(--ink)]'
+                    }`}
+                  >
+                    {debugOpen ? 'Hide debug' : 'Show debug'}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -201,48 +212,13 @@ function App() {
 
             <ModelViewport
               response={latestResponse}
+              viewer={manifest?.viewer ?? null}
               selectedSegment={selectedSegment}
               setSelectedSegment={setSelectedSegment}
-              avatarAvailable={avatarAvailable}
               onViewerModeChange={setViewerMode}
               onAppliedSegmentsChange={setAppliedSegments}
+              onWarning={setWarning}
             />
-          </motion.section>
-
-          <motion.aside initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-            <div className="rounded-[28px] border border-[var(--border)] bg-[var(--surface)]/92 p-5 shadow-[var(--shadow)]">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-[var(--serif)] text-xl text-[var(--ink)]">Inspector</p>
-                  <p className="text-sm text-[var(--muted)]">
-                    Toggle transform diagnostics without interrupting the viewer.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setDebugOpen(!debugOpen)}
-                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                    debugOpen
-                      ? 'bg-[var(--accent)] text-white'
-                      : 'border border-[var(--border)] bg-white text-[var(--ink)]'
-                  }`}
-                >
-                  {debugOpen ? 'Hide debug' : 'Show debug'}
-                </button>
-              </div>
-
-              <div className="mt-5 space-y-3 text-sm text-[var(--muted)]">
-                <p>
-                  Current request mode: <strong className="text-[var(--ink)]">{lastRequestMode}</strong>
-                </p>
-                <p>
-                  Current segment: <strong className="text-[var(--ink)]">{selectedSegment}</strong>
-                </p>
-                <p>
-                  Bone mapping warnings never blank the viewer. Unmapped segments stay in rest pose when the
-                  avatar is active.
-                </p>
-              </div>
-            </div>
 
             <DebugPanel
               open={debugOpen}
@@ -251,7 +227,7 @@ function App() {
               setSelectedSegment={setSelectedSegment}
               appliedSegments={appliedSegments}
             />
-          </motion.aside>
+          </motion.section>
         </div>
       </main>
     </div>

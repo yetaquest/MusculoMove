@@ -20,41 +20,26 @@ export function StatusBar({
 }: StatusBarProps) {
   return (
     <div className="flex flex-col gap-3">
-      <Card className="overflow-hidden">
-        <div className="flex items-center justify-between gap-4 border-b border-[var(--border)] px-5 py-4">
-          <div>
-            <p className="font-[var(--serif)] text-lg text-[var(--ink)]">Runtime status</p>
-            <p className="text-sm text-[var(--muted)]">{requestMessage}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge className="bg-[var(--accent-soft)] text-[var(--accent-strong)]">
-              {lastRequestMode}
-            </Badge>
-            <Badge>{interactionMode === 'debounced' ? 'Live preview' : 'Release to preview'}</Badge>
-          </div>
-        </div>
-        <div className="grid gap-3 px-5 py-4 text-sm text-[var(--muted)] sm:grid-cols-2">
-          <div className="flex items-center gap-3">
+      <Card className="px-5 py-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3">
             <span className="rounded-full bg-[var(--surface-strong)] p-2 text-[var(--accent-strong)]">
               <Activity className="size-4" />
             </span>
             <div>
-              <p className="font-medium text-[var(--ink)]">Request mode</p>
-              <p>{requestRunning ? 'Working on the latest request.' : 'Stable. Ready for the next update.'}</p>
+              <p className="font-medium text-[var(--ink)]">
+                {requestRunning ? 'Processing current request' : 'Viewer ready'}
+              </p>
+              <p className="text-sm text-[var(--muted)]">{requestMessage}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="rounded-full bg-[var(--surface-strong)] p-2 text-[var(--accent-strong)]">
-              {interactionMode === 'debounced' ? <Orbit className="size-4" /> : <TimerReset className="size-4" />}
-            </span>
-            <div>
-              <p className="font-medium text-[var(--ink)]">Preview policy</p>
-              <p>
-                {interactionMode === 'debounced'
-                  ? 'Slider edits debounce into evaluate requests.'
-                  : 'The UI waits until release before requesting a new preview.'}
-              </p>
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge className="bg-[var(--accent-soft)] text-[var(--accent-strong)]">{lastRequestMode}</Badge>
+            <Badge>{interactionMode === 'debounced' ? 'Live preview' : 'Release to preview'}</Badge>
+            <Badge className="gap-2">
+              {interactionMode === 'debounced' ? <Orbit className="size-3.5" /> : <TimerReset className="size-3.5" />}
+              {interactionMode === 'debounced' ? 'Auto evaluate' : 'Manual preview'}
+            </Badge>
           </div>
         </div>
       </Card>

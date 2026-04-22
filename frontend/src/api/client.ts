@@ -39,8 +39,3 @@ export async function postOptimize(body: OptimizeRequest) {
 export async function fetchSampleResponse() {
   return fetchJson<unknown>('/sample-response.json')
 }
-
-export async function probeAvatarAsset() {
-  const response = await fetch('/models/avatar.glb', { method: 'HEAD' })
-  return response.ok
-}

@@ -1,4 +1,3 @@
-import { segmentBoneMap } from '../../lib/segmentMap'
 import { quaternionTuple, segmentTransformToPose } from '../../lib/transformAdapter'
 import type { NormalizedPoseResponse } from '../../types/api'
 import type { AppliedSegmentInfo } from '../../types/viewer'
@@ -56,7 +55,7 @@ export function DebugPanel({
         </label>
 
         <div className="grid gap-3 rounded-[24px] bg-[var(--surface-strong)] p-4 text-sm">
-          <DebugRow label="Mapped bone" value={applied?.boneName ?? segmentBoneMap[selectedSegment] ?? 'unmapped'} />
+          <DebugRow label="Mapped node" value={applied?.nodeName ?? 'unmapped'} />
           <DebugRow label="Applied" value={String(applied?.applied ?? false)} />
           <DebugRow label="Request mode" value={response?.status.mode ?? 'fallback'} />
         </div>

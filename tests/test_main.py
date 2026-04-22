@@ -8,16 +8,22 @@ class ManifestTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.manifest = main.load_model_manifest()
+        cls.summary = main.manifest_summary(cls.manifest)
 
-    def test_active_model_path_is_hardcoded_to_rajagopal(self) -> None:
+    def test_active_model_path_is_hardcoded_to_rajagopal_lai_uhlrich_2023(self) -> None:
         self.assertEqual(main.ACTIVE_MODEL_RELATIVE_PATH, "models/RajagopalLaiUhlrich2023.osim")
         self.assertTrue(main.ACTIVE_MODEL_PATH.exists())
+        self.assertTrue(main.ACTIVE_MODEL_GEOMETRY_PATH.exists())
 
     def test_manifest_counts_match_model_file(self) -> None:
-        self.assertEqual(self.manifest.model_name, "RajagopalLaiUhlrich2023")
+        self.assertEqual(
+            self.manifest.model_name,
+            "RajagopalLaiUhlrich2023",
+        )
         self.assertEqual(len(self.manifest.coordinates), 39)
         self.assertEqual(len(self.manifest.bodies), 22)
         self.assertEqual(len(self.manifest.muscles), 80)
+        self.assertNotIn("ground", self.manifest.bodies)
 
     def test_phase_one_coordinates_exist_in_manifest(self) -> None:
         for coordinate_name in main.ACTIVE_OPTIMIZER_COORDINATES:
@@ -36,6 +42,13 @@ class ManifestTests(unittest.TestCase):
             outer_bounds = outer[coordinate_name]
             self.assertGreaterEqual(inner_bounds[0], outer_bounds[0])
             self.assertLessEqual(inner_bounds[1], outer_bounds[1])
+
+    def test_manifest_includes_viewer_metadata(self) -> None:
+        viewer = self.summary["viewer"]
+        self.assertEqual(viewer["asset_url"], "/api/viewer/model.gltf")
+        self.assertEqual(viewer["model_path"], "models/RajagopalLaiUhlrich2023.osim")
+        self.assertEqual(viewer["geometry_path"], "models/FullBodyModel-4.0/Geometry")
+        self.assertEqual(viewer["body_nodes"]["pelvis"], "Body:/bodyset/pelvis")
 
 
 class ObjectiveTests(unittest.TestCase):
