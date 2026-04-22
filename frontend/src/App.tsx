@@ -11,34 +11,23 @@ import { selectionsToRequests } from './lib/muscleSelection'
 import { useAppStore } from './state/appStore'
 import type { AppliedSegmentInfo } from './types/viewer'
 
-async function requestEvaluate() {
-  const state = useAppStore.getState()
-  if (!state.manifest) {
-    return
-  }
-  useAppStore.setState({
-    requestRunning: true,
-    requestMessage: 'Evaluating the current passive scenario…',
-    lastRequestMode: 'evaluate',
-  })
-  const requests = selectionsToRequests(state.activeSelections, state.manifest.muscleCatalog)
-  const startedAt = performance.now()
-  try {
-    const raw = await postEvaluate(requests.evaluate)
-    const response = normalizePoseResponse(raw, 'backend')
-    state.setLatestResponse(response)
-    state.setWarning(null)
-    const durationMs = performance.now() - startedAt
-    if (durationMs > 850) {
-      state.setInteractionMode('release')
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Evaluate request failed.'
-    state.setWarning(`${message} Keeping the last valid pose on screen.`)
-    useAppStore.setState({ requestRunning: false })
-    toast.warning(message)
-  }
-}
+const debugTestPose = {
+  pelvis_tilt: -0.22,
+  lumbar_extension: 0.16,
+  hip_flexion_r: 0.68,
+  knee_angle_r: 0.82,
+  ankle_angle_r: -0.28,
+} as const
+
+const neutralPhase1Pose = {
+  pelvis_tilt: 0,
+  lumbar_extension: 0,
+  hip_flexion_r: 0,
+  knee_angle_r: 0,
+  ankle_angle_r: 0,
+} as const
+
+type ViewerDiagnosticMode = 'none' | 'frontend-limb-test'
 
 async function requestOptimize() {
   const state = useAppStore.getState()
@@ -51,16 +40,53 @@ async function requestOptimize() {
     lastRequestMode: 'optimize',
   })
   const requests = selectionsToRequests(state.activeSelections, state.manifest.muscleCatalog)
+  const startedAt = performance.now()
   try {
     const raw = await postOptimize(requests.optimize)
     const response = normalizePoseResponse(raw, 'backend')
     state.setLatestResponse(response)
     state.setWarning(null)
+    const durationMs = performance.now() - startedAt
+    if (durationMs > 850) {
+      state.setInteractionMode('release')
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Optimize request failed.'
     state.setWarning(`${message} Keeping the last valid pose on screen.`)
     useAppStore.setState({ requestRunning: false })
     toast.error(message)
+  }
+}
+
+async function requestPosturePreview() {
+  await requestOptimize()
+}
+
+async function requestDebugPose(pose: Record<string, number>, message: string) {
+  const state = useAppStore.getState()
+  if (!state.manifest) {
+    return
+  }
+  useAppStore.setState({
+    requestRunning: true,
+    requestMessage: message,
+    lastRequestMode: 'evaluate',
+  })
+  try {
+    const raw = await postEvaluate({
+      pose,
+      tightness: [],
+      selected_groups: [],
+      include_upper_body_debug_metrics: false,
+    })
+    const response = normalizePoseResponse(raw, 'backend')
+    state.setLatestResponse(response)
+    state.setWarning(null)
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Debug pose request failed.'
+    state.setWarning(`${errorMessage} Keeping the last valid pose on screen.`)
+    useAppStore.setState({ requestRunning: false })
+    toast.error(errorMessage)
   }
 }
 
@@ -86,6 +112,8 @@ function App() {
   const setSelectedSegment = useAppStore((state) => state.setSelectedSegment)
   const setViewerMode = useAppStore((state) => state.setViewerMode)
   const [appliedSegments, setAppliedSegments] = useState<Record<string, AppliedSegmentInfo>>({})
+  const [viewerDiagnosticMode, setViewerDiagnosticMode] =
+    useState<ViewerDiagnosticMode>('none')
 
   useEffect(() => {
     let active = true
@@ -113,7 +141,7 @@ function App() {
           setManifest(normalizedManifest)
           setViewerMode(normalizedManifest.viewer.runtime.available ? 'opensim' : 'debug')
         })
-        await requestEvaluate()
+        await requestPosturePreview()
       } catch (error) {
         if (!active) {
           return
@@ -134,14 +162,14 @@ function App() {
   }, [setManifest, setSampleResponse, setViewerMode, setWarning])
 
   useEffect(() => {
-    if (!manifest || interactionMode !== 'debounced') {
+    if (!manifest || interactionMode !== 'debounced' || requestRunning) {
       return
     }
     const timeout = window.setTimeout(() => {
-      void requestEvaluate()
-    }, 220)
+      void requestPosturePreview()
+    }, 320)
     return () => window.clearTimeout(timeout)
-  }, [activeSelections, interactionMode, manifest])
+  }, [activeSelections, interactionMode, manifest, requestRunning])
 
   return (
     <div className="musculomove-shell">
@@ -162,10 +190,10 @@ function App() {
               removeSelection={removeSelection}
               clearSelections={() => {
                 clearSelections()
-                void requestEvaluate()
+                void requestPosturePreview()
               }}
               optimize={() => void requestOptimize()}
-              commitEvaluate={() => void requestEvaluate()}
+              commitEvaluate={() => void requestPosturePreview()}
             />
           </motion.section>
 
@@ -213,6 +241,7 @@ function App() {
             <ModelViewport
               response={latestResponse}
               viewer={manifest?.viewer ?? null}
+              diagnosticMode={viewerDiagnosticMode}
               selectedSegment={selectedSegment}
               setSelectedSegment={setSelectedSegment}
               onViewerModeChange={setViewerMode}
@@ -226,6 +255,16 @@ function App() {
               selectedSegment={selectedSegment}
               setSelectedSegment={setSelectedSegment}
               appliedSegments={appliedSegments}
+              requestRunning={requestRunning}
+              applyDebugPose={() =>
+                void requestDebugPose(debugTestPose, 'Applying an obvious debug pose…')
+              }
+              resetDebugPose={() =>
+                void requestDebugPose(neutralPhase1Pose, 'Resetting the debug pose…')
+              }
+              diagnosticMode={viewerDiagnosticMode}
+              enableFrontendLimbTest={() => setViewerDiagnosticMode('frontend-limb-test')}
+              clearFrontendLimbTest={() => setViewerDiagnosticMode('none')}
             />
           </motion.section>
         </div>

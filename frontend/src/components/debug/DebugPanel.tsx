@@ -2,6 +2,15 @@ import { quaternionTuple, segmentTransformToPose } from '../../lib/transformAdap
 import type { NormalizedPoseResponse } from '../../types/api'
 import type { AppliedSegmentInfo } from '../../types/viewer'
 import { Card } from '../ui/card'
+import { Button } from '../ui/button'
+
+const phase1Coordinates = [
+  'pelvis_tilt',
+  'lumbar_extension',
+  'hip_flexion_r',
+  'knee_angle_r',
+  'ankle_angle_r',
+] as const
 
 type DebugPanelProps = {
   open: boolean
@@ -9,6 +18,12 @@ type DebugPanelProps = {
   selectedSegment: string
   setSelectedSegment: (segment: string) => void
   appliedSegments: Record<string, AppliedSegmentInfo>
+  requestRunning: boolean
+  applyDebugPose: () => void
+  resetDebugPose: () => void
+  diagnosticMode: 'none' | 'frontend-limb-test'
+  enableFrontendLimbTest: () => void
+  clearFrontendLimbTest: () => void
 }
 
 export function DebugPanel({
@@ -17,6 +32,12 @@ export function DebugPanel({
   selectedSegment,
   setSelectedSegment,
   appliedSegments,
+  requestRunning,
+  applyDebugPose,
+  resetDebugPose,
+  diagnosticMode,
+  enableFrontendLimbTest,
+  clearFrontendLimbTest,
 }: DebugPanelProps) {
   if (!open) {
     return null
@@ -26,17 +47,66 @@ export function DebugPanel({
   const transform = response?.segmentTransforms[selectedSegment]
   const pose = transform ? segmentTransformToPose(transform) : null
   const applied = appliedSegments[selectedSegment]
+  const appliedCount = Object.values(appliedSegments).filter((segment) => segment.applied).length
+  const totalCount = Object.keys(appliedSegments).length
+  const phase1Pose = phase1Coordinates.map((coordinate) => ({
+    coordinate,
+    value: response?.poseRad[coordinate] ?? 0,
+  }))
 
   return (
     <Card className="h-full p-5">
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="font-[var(--serif)] text-lg text-[var(--ink)]">Debug inspector</p>
-          <p className="text-sm text-[var(--muted)]">Matrix-first backend data, mapped for the viewer.</p>
+          <p className="text-sm text-[var(--muted)]">
+            Matrix-first backend data, mapped for the viewer. Non-zero phase-1 coordinates confirm
+            the model received a new posture solution.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" onClick={applyDebugPose} disabled={requestRunning}>
+            Backend test pose
+          </Button>
+          <Button size="sm" variant="ghost" onClick={resetDebugPose} disabled={requestRunning}>
+            Reset backend pose
+          </Button>
+          <Button
+            size="sm"
+            variant={diagnosticMode === 'frontend-limb-test' ? 'primary' : 'secondary'}
+            onClick={enableFrontendLimbTest}
+            disabled={requestRunning}
+          >
+            Frontend limb test
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={clearFrontendLimbTest}
+            disabled={requestRunning || diagnosticMode === 'none'}
+          >
+            Clear frontend test
+          </Button>
         </div>
       </div>
 
       <div className="mt-5 space-y-5">
+        <div className="grid gap-3 rounded-[24px] bg-[var(--surface-strong)] p-4 text-sm">
+          <DebugRow label="Request mode" value={response?.status.mode ?? 'fallback'} />
+          <DebugRow label="Applied segments" value={`${appliedCount}/${totalCount || 0}`} />
+          <DebugRow label="Frontend test" value={diagnosticMode} />
+          <DebugRow label="Mapped node" value={applied?.nodeName ?? 'unmapped'} />
+          <DebugRow label="Selected node applied" value={String(applied?.applied ?? false)} />
+        </div>
+
+        <DebugMatrix
+          title="Phase-1 pose"
+          lines={phase1Pose.map(
+            ({ coordinate, value }) =>
+              `${coordinate}: ${value.toFixed(4)} rad (${radToDeg(value).toFixed(2)} deg)`,
+          )}
+        />
+
         <label className="block">
           <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
             Selected segment
@@ -53,12 +123,6 @@ export function DebugPanel({
             ))}
           </select>
         </label>
-
-        <div className="grid gap-3 rounded-[24px] bg-[var(--surface-strong)] p-4 text-sm">
-          <DebugRow label="Mapped node" value={applied?.nodeName ?? 'unmapped'} />
-          <DebugRow label="Applied" value={String(applied?.applied ?? false)} />
-          <DebugRow label="Request mode" value={response?.status.mode ?? 'fallback'} />
-        </div>
 
         <DebugMatrix
           title="Translation (m)"
@@ -103,4 +167,8 @@ function DebugMatrix({ title, lines }: { title: string; lines: string[] }) {
       </div>
     </div>
   )
+}
+
+function radToDeg(value: number) {
+  return (value * 180) / Math.PI
 }

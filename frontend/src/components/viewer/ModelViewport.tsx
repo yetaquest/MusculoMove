@@ -1,19 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { ContactShadows, Html, OrbitControls } from '@react-three/drei'
+import { Canvas, useThree } from '@react-three/fiber'
+import { Html, OrbitControls } from '@react-three/drei'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { Matrix4, Object3D, Quaternion, Vector3 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import type { NormalizedPoseResponse, ViewerConfig } from '../../types/api'
 import type { AppliedSegmentInfo, CameraPreset, ViewerMode } from '../../types/viewer'
-import { blendPose, smoothingAlpha } from '../../lib/interpolation'
-import { quaternionTuple, segmentTransformToMatrix4, segmentTransformToPose } from '../../lib/transformAdapter'
+import {
+  applySegmentTransformToMatrix4,
+  applySegmentTransformToPose,
+  quaternionTuple,
+  segmentTransformToPose,
+} from '../../lib/transformAdapter'
 import { Button } from '../ui/button'
 import { Card } from '../ui/card'
 
 type ModelViewportProps = {
   response: NormalizedPoseResponse | null
   viewer: ViewerConfig | null
+  diagnosticMode: 'none' | 'frontend-limb-test'
   selectedSegment: string
   setSelectedSegment: (segment: string) => void
   onViewerModeChange: (mode: ViewerMode) => void
@@ -40,6 +45,18 @@ const debugSegmentSizes: Record<string, [number, number, number]> = {
   hand_l: [0.1, 0.06, 0.08],
 }
 
+const cameraTarget = new Vector3(0, 1.02, 0)
+const identityMatrix = new Matrix4()
+const cameraPositions: Record<CameraPreset, [number, number, number]> = {
+  front: [3.25, 1.45, 0],
+  side: [0, 1.35, 3.1],
+  'three-quarter': [2.6, 1.7, 2.6],
+}
+
+function canonicalizeViewerNodeName(name: string) {
+  return name.replace(/[^A-Za-z0-9_]/g, '')
+}
+
 function resolveViewerAssetUrl(assetUrl: string) {
   const apiRoot = import.meta.env.VITE_API_ROOT ?? '/api'
   if (assetUrl.startsWith('http://') || assetUrl.startsWith('https://')) {
@@ -54,6 +71,7 @@ function resolveViewerAssetUrl(assetUrl: string) {
 export function ModelViewport({
   response,
   viewer,
+  diagnosticMode,
   selectedSegment,
   setSelectedSegment,
   onViewerModeChange,
@@ -103,14 +121,13 @@ export function ModelViewport({
           </div>
         </div>
 
-        <Canvas camera={{ position: [2.6, 1.7, 2.6], fov: 34 }} shadows className="size-full">
+        <Canvas camera={{ position: [2.6, 1.7, 2.6], fov: 34 }} frameloop="demand" className="size-full">
           <color attach="background" args={['#f7f1e6']} />
           <fog attach="fog" args={['#f7f1e6', 5, 12]} />
           <ambientLight intensity={0.9} />
           <directionalLight
             position={[5, 7, 4]}
             intensity={1.35}
-            castShadow
             shadow-mapSize-width={2048}
             shadow-mapSize-height={2048}
           />
@@ -119,7 +136,9 @@ export function ModelViewport({
           <CameraController preset={cameraPreset} />
           {opensimViewerAvailable && viewer ? (
             <OpenSimBody
+              key={viewer.assetUrl}
               response={response}
+              diagnosticMode={diagnosticMode}
               viewer={viewer}
               onAppliedSegmentsChange={onAppliedSegmentsChange}
               onLoadError={(message) => {
@@ -139,7 +158,6 @@ export function ModelViewport({
               onAppliedSegmentsChange={onAppliedSegmentsChange}
             />
           )}
-          <ContactShadows position={[0, 0.001, 0]} opacity={0.35} scale={8} blur={2.5} far={3.2} />
         </Canvas>
 
         <div className="pointer-events-none absolute inset-x-4 bottom-4 z-20 flex justify-end">
@@ -157,15 +175,9 @@ function CameraController({ preset }: { preset: CameraPreset }) {
   const { camera } = useThree()
 
   useEffect(() => {
-    const target = new Vector3(0, 1.02, 0)
-    const positions: Record<CameraPreset, [number, number, number]> = {
-      front: [3.25, 1.45, 0],
-      side: [0, 1.35, 3.1],
-      'three-quarter': [2.6, 1.7, 2.6],
-    }
-    const nextPosition = positions[preset]
+    const nextPosition = cameraPositions[preset]
     camera.position.set(...nextPosition)
-    controlsRef.current?.target.copy(target)
+    controlsRef.current?.target.copy(cameraTarget)
     controlsRef.current?.update()
   }, [camera, preset])
 
@@ -183,12 +195,14 @@ function Ground() {
 
 function OpenSimBody({
   response,
+  diagnosticMode,
   viewer,
   onAppliedSegmentsChange,
   onLoadError,
   onReady,
 }: {
   response: NormalizedPoseResponse | null
+  diagnosticMode: 'none' | 'frontend-limb-test'
   viewer: ViewerConfig
   onAppliedSegmentsChange: (segments: Record<string, AppliedSegmentInfo>) => void
   onLoadError: (message: string) => void
@@ -196,15 +210,23 @@ function OpenSimBody({
 }) {
   const [scene, setScene] = useState<Object3D | null>(null)
   const nodesRef = useRef<Record<string, Object3D>>({})
-  const tempPosition = useRef(new Vector3())
-  const tempQuaternion = useRef(new Quaternion())
-  const tempScale = useRef(new Vector3())
-  const tempLocalMatrix = useRef(new Matrix4())
+  const scratchPosition = useRef(new Vector3())
+  const scratchQuaternion = useRef(new Quaternion())
+  const scratchScale = useRef(new Vector3())
+  const scratchWorldMatrix = useRef(new Matrix4())
+  const scratchLocalMatrix = useRef(new Matrix4())
+  const scratchParentMatrix = useRef(new Matrix4())
+  const diagnosticOriginalsRef = useRef<
+    Record<string, { position: Vector3; quaternion: Quaternion; scale: Vector3 }>
+  >({})
+  const invalidate = useThree((state) => state.invalidate)
   const assetUrl = useMemo(() => resolveViewerAssetUrl(viewer.assetUrl), [viewer.assetUrl])
 
   useEffect(() => {
     let cancelled = false
+    let loadedScene: Object3D | null = null
     const loader = new GLTFLoader()
+    nodesRef.current = {}
     loader.load(
       assetUrl,
       (gltf) => {
@@ -212,10 +234,12 @@ function OpenSimBody({
           return
         }
         const nextScene = gltf.scene.clone(true)
+        loadedScene = nextScene
         const nodes: Record<string, Object3D> = {}
         nextScene.traverse((object: Object3D) => {
           if (object.name) {
             nodes[object.name] = object
+            nodes[canonicalizeViewerNodeName(object.name)] = object
           }
         })
         nodesRef.current = nodes
@@ -237,65 +261,154 @@ function OpenSimBody({
 
     return () => {
       cancelled = true
+      nodesRef.current = {}
+      if (loadedScene) {
+        disposeSceneGraph(loadedScene)
+      }
     }
   }, [assetUrl, onLoadError, onReady])
 
   useEffect(() => {
-    if (!response) {
-      return
-    }
-    const appliedSegments: Record<string, AppliedSegmentInfo> = {}
-    Object.entries(response.segmentTransforms).forEach(([segmentName, transform]) => {
-      const nodeName = viewer.bodyNodes[segmentName] ?? null
-      appliedSegments[segmentName] = {
-        segmentName,
-        nodeName,
-        applied: Boolean(nodeName && nodesRef.current[nodeName]),
-        quaternion: quaternionTuple(segmentTransformToPose(transform).quaternion),
-      }
-    })
-    onAppliedSegmentsChange(appliedSegments)
-  }, [onAppliedSegmentsChange, response, scene, viewer.bodyNodes])
-
-  useFrame((_, delta) => {
     if (!response || !scene) {
       return
     }
-    const alpha = smoothingAlpha(delta)
+
+    const appliedSegments: Record<string, AppliedSegmentInfo> = {}
     scene.updateMatrixWorld(true)
     Object.entries(response.segmentTransforms).forEach(([segmentName, transform]) => {
-      const nodeName = viewer.bodyNodes[segmentName]
-      if (!nodeName) {
-        return
+      const nodeName = viewer.bodyNodes[segmentName] ?? null
+      const node = nodeName
+        ? nodesRef.current[nodeName] ?? nodesRef.current[canonicalizeViewerNodeName(nodeName)]
+        : null
+      applySegmentTransformToPose(
+        transform,
+        scratchPosition.current,
+        scratchQuaternion.current,
+        scratchScale.current,
+        scratchWorldMatrix.current,
+      )
+      appliedSegments[segmentName] = {
+        segmentName,
+        nodeName,
+        applied: Boolean(node),
+        quaternion: quaternionTuple(scratchQuaternion.current),
       }
-      const node = nodesRef.current[nodeName]
+
       if (!node) {
         return
       }
-      const parentMatrix = node.parent?.matrixWorld ?? new Matrix4()
-      tempLocalMatrix.current.copy(parentMatrix).invert().multiply(segmentTransformToMatrix4(transform))
-      tempLocalMatrix.current.decompose(
-        tempPosition.current,
-        tempQuaternion.current,
-        tempScale.current,
+
+      const parentWorldMatrix = node.parent?.matrixWorld ?? identityMatrix
+      scratchParentMatrix.current.copy(parentWorldMatrix).invert()
+      applySegmentTransformToMatrix4(transform, scratchLocalMatrix.current)
+      scratchLocalMatrix.current.premultiply(scratchParentMatrix.current)
+      scratchLocalMatrix.current.decompose(
+        scratchPosition.current,
+        scratchQuaternion.current,
+        scratchScale.current,
       )
-      blendPose(
-        node.position,
-        node.quaternion,
-        tempPosition.current,
-        tempQuaternion.current,
-        alpha,
-      )
+      node.position.copy(scratchPosition.current)
+      node.quaternion.copy(scratchQuaternion.current)
       node.updateMatrix()
-      node.updateMatrixWorld(true)
     })
-  })
+    scene.updateMatrixWorld(true)
+    onAppliedSegmentsChange(appliedSegments)
+    invalidate()
+  }, [invalidate, onAppliedSegmentsChange, response, scene, viewer.bodyNodes])
+
+  useEffect(() => {
+    if (!scene) {
+      return
+    }
+
+    const diagnosticTargets = [
+      {
+        nodeName: 'Body:/bodyset/femur_r',
+        translation: [0.24, 0.18, 0] as const,
+        rotationAxis: [0, 0, 1] as const,
+        rotationRad: 1.2,
+      },
+      {
+        nodeName: 'Body:/bodyset/tibia_r',
+        translation: [0.34, 0.08, 0] as const,
+        rotationAxis: [0, 0, 1] as const,
+        rotationRad: 1.35,
+      },
+      {
+        nodeName: 'Body:/bodyset/calcn_r',
+        translation: [0.36, -0.02, 0] as const,
+        rotationAxis: [0, 0, 1] as const,
+        rotationRad: 0.95,
+      },
+    ]
+
+    if (diagnosticMode === 'frontend-limb-test') {
+      diagnosticTargets.forEach(({ nodeName, translation, rotationAxis, rotationRad }) => {
+        const node =
+          nodesRef.current[nodeName] ?? nodesRef.current[canonicalizeViewerNodeName(nodeName)]
+        if (!node) {
+          return
+        }
+        if (!diagnosticOriginalsRef.current[nodeName]) {
+          diagnosticOriginalsRef.current[nodeName] = {
+            position: node.position.clone(),
+            quaternion: node.quaternion.clone(),
+            scale: node.scale.clone(),
+          }
+        }
+        node.position.copy(diagnosticOriginalsRef.current[nodeName].position)
+        node.quaternion.copy(diagnosticOriginalsRef.current[nodeName].quaternion)
+        node.position.add(new Vector3(...translation))
+        node.quaternion.multiply(
+          new Quaternion().setFromAxisAngle(new Vector3(...rotationAxis), rotationRad),
+        )
+        node.updateMatrix()
+      })
+      scene.updateMatrixWorld(true)
+      invalidate()
+      return
+    }
+
+    const originalEntries = Object.entries(diagnosticOriginalsRef.current)
+    if (originalEntries.length === 0) {
+      return
+    }
+    originalEntries.forEach(([nodeName, original]) => {
+      const node =
+        nodesRef.current[nodeName] ?? nodesRef.current[canonicalizeViewerNodeName(nodeName)]
+      if (!node) {
+        return
+      }
+      node.position.copy(original.position)
+      node.quaternion.copy(original.quaternion)
+      node.scale.copy(original.scale)
+      node.updateMatrix()
+    })
+    diagnosticOriginalsRef.current = {}
+    scene.updateMatrixWorld(true)
+    invalidate()
+  }, [diagnosticMode, invalidate, response, scene])
 
   if (!scene) {
     return <Html center>Loading OpenSim model…</Html>
   }
 
   return <primitive object={scene} position={[0, 0, 0]} />
+}
+
+function disposeSceneGraph(root: Object3D) {
+  root.traverse((object) => {
+    const disposableObject = object as Object3D & {
+      geometry?: { dispose?: () => void }
+      material?: { dispose?: () => void } | Array<{ dispose?: () => void }>
+    }
+    disposableObject.geometry?.dispose?.()
+    if (Array.isArray(disposableObject.material)) {
+      disposableObject.material.forEach((material) => material.dispose?.())
+      return
+    }
+    disposableObject.material?.dispose?.()
+  })
 }
 
 function DebugBody({

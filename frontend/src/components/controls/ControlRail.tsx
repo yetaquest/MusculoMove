@@ -72,14 +72,14 @@ export function ControlRail({
         <div className="mt-4 rounded-[22px] border border-[var(--border)] bg-white/80 p-4 text-sm text-[var(--muted)]">
           <ol className="space-y-3">
             <li>1. Add one or two lower-body muscles from the list below.</li>
-            <li>2. Set side and severity, then use `Preview current sliders` or let live preview update.</li>
-            <li>3. Press `Optimize` to solve the current passive compensation pose and inspect the model output.</li>
+            <li>2. Set side and severity, then let live preview solve a posture update or press `Update posture`.</li>
+            <li>3. Use `Optimize` any time you want to rerun the phase-1 passive compensation solve explicitly.</li>
           </ol>
         </div>
 
         <div className="mt-4 rounded-[22px] bg-[var(--accent-soft)] px-4 py-3 text-sm text-[var(--ink)]">
-          Example: tighten `iliacus` and `psoas` on the right at `0.60`, preview the pose, then run
-          `Optimize` and compare the pelvis and hip posture in the viewport.
+          Example: tighten `iliacus` and `psoas` on the right at `0.60`, let the solver update the
+          pose, then compare the pelvis, hip, and ankle posture in the viewport.
         </div>
       </Card>
 
@@ -88,7 +88,7 @@ export function ControlRail({
           <div>
             <p className="font-[var(--serif)] text-2xl text-[var(--ink)]">Lower-body tightness</p>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              Add lower-body muscles, choose a side, then evaluate or optimize the passive scenario.
+              Add lower-body muscles, choose a side, then solve the passive posture response.
             </p>
           </div>
         </div>
@@ -146,7 +146,7 @@ export function ControlRail({
           <div>
             <p className="font-[var(--serif)] text-xl text-[var(--ink)]">Active selections</p>
             <p className="text-sm text-[var(--muted)]">
-              Preview updates the current passive scenario. Optimize solves the phase-1 pose.
+              Slider changes now update the posture preview. Optimize reruns the same phase-1 solve on demand.
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={clearSelections}>
@@ -226,7 +226,7 @@ export function ControlRail({
           </Button>
           {interactionMode === 'release' ? (
             <Button variant="secondary" onClick={commitEvaluate} disabled={requestRunning}>
-              Preview current sliders
+              Update posture
             </Button>
           ) : null}
         </div>
