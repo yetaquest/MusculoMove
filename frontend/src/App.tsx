@@ -1,14 +1,15 @@
-import { startTransition, useEffect, useState } from 'react'
+import { startTransition, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { fetchManifest, fetchSampleResponse, postEvaluate, postOptimize } from './api/client'
 import { normalizeManifestResponse, normalizePoseResponse } from './api/normalize'
-import { ControlRail } from './components/controls/ControlRail'
+import { ControlRail, QuickStartCard } from './components/controls/ControlRail'
 import { DebugPanel } from './components/debug/DebugPanel'
 import { StatusBar } from './components/status/StatusBar'
 import { ModelViewport } from './components/viewer/ModelViewport'
 import { selectionsToRequests } from './lib/muscleSelection'
 import { useAppStore } from './state/appStore'
+import type { NormalizedPoseResponse } from './types/api'
 import type { AppliedSegmentInfo } from './types/viewer'
 
 const debugTestPose = {
@@ -93,6 +94,7 @@ async function requestDebugPose(pose: Record<string, number>, message: string) {
 function App() {
   const manifest = useAppStore((state) => state.manifest)
   const latestResponse = useAppStore((state) => state.latestResponse)
+  const sampleResponse = useAppStore((state) => state.sampleResponse)
   const activeSelections = useAppStore((state) => state.activeSelections)
   const warning = useAppStore((state) => state.warning)
   const debugOpen = useAppStore((state) => state.debugOpen)
@@ -100,7 +102,6 @@ function App() {
   const requestMessage = useAppStore((state) => state.requestMessage)
   const requestRunning = useAppStore((state) => state.requestRunning)
   const interactionMode = useAppStore((state) => state.interactionMode)
-  const lastRequestMode = useAppStore((state) => state.lastRequestMode)
   const setManifest = useAppStore((state) => state.setManifest)
   const setSampleResponse = useAppStore((state) => state.setSampleResponse)
   const addSelection = useAppStore((state) => state.addSelection)
@@ -114,6 +115,8 @@ function App() {
   const [appliedSegments, setAppliedSegments] = useState<Record<string, AppliedSegmentInfo>>({})
   const [viewerDiagnosticMode, setViewerDiagnosticMode] =
     useState<ViewerDiagnosticMode>('none')
+  const [baselineResponse, setBaselineResponse] = useState<NormalizedPoseResponse | null>(null)
+  const lastAutoPreviewKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -141,7 +144,15 @@ function App() {
           setManifest(normalizedManifest)
           setViewerMode(normalizedManifest.viewer.runtime.available ? 'opensim' : 'debug')
         })
-        await requestPosturePreview()
+        const baselineRaw = await postEvaluate({
+          tightness: [],
+          selected_groups: [],
+          include_upper_body_debug_metrics: false,
+        })
+        if (!active) {
+          return
+        }
+        setBaselineResponse(normalizePoseResponse(baselineRaw, 'backend'))
       } catch (error) {
         if (!active) {
           return
@@ -162,14 +173,27 @@ function App() {
   }, [setManifest, setSampleResponse, setViewerMode, setWarning])
 
   useEffect(() => {
-    if (!manifest || interactionMode !== 'debounced' || requestRunning) {
+    if (!manifest || !baselineResponse || interactionMode !== 'debounced') {
       return
     }
+
+    const selectionKey = JSON.stringify(
+      activeSelections.map((selection) => [
+        selection.baseName,
+        selection.side,
+        Number(selection.severity.toFixed(3)),
+      ]),
+    )
+    if (requestRunning || lastAutoPreviewKeyRef.current === selectionKey) {
+      return
+    }
+
     const timeout = window.setTimeout(() => {
+      lastAutoPreviewKeyRef.current = selectionKey
       void requestPosturePreview()
     }, 320)
     return () => window.clearTimeout(timeout)
-  }, [activeSelections, interactionMode, manifest, requestRunning])
+  }, [activeSelections, baselineResponse, interactionMode, manifest, requestRunning])
 
   return (
     <div className="musculomove-shell">
@@ -202,52 +226,28 @@ function App() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
-            <div className="rounded-[28px] border border-[var(--border)] bg-[var(--surface)]/88 px-5 py-5 shadow-[var(--shadow)] backdrop-blur">
-              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent-strong)]">
-                    Viewer
-                  </p>
-                  <h1 className="mt-2 max-w-3xl font-[var(--serif)] text-3xl leading-[1.04] tracking-[-0.04em] text-[var(--ink)] lg:text-5xl">
-                    Passive posture output with a cleaner full-body viewport.
-                  </h1>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="hidden rounded-full border border-[var(--border)] bg-white/80 px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)] sm:block">
-                    Lower-body controls only
-                  </div>
-                  <button
-                    onClick={() => setDebugOpen(!debugOpen)}
-                    className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                      debugOpen
-                        ? 'bg-[var(--accent)] text-white'
-                        : 'border border-[var(--border)] bg-white text-[var(--ink)]'
-                    }`}
-                  >
-                    {debugOpen ? 'Hide debug' : 'Show debug'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
             <StatusBar
               requestMessage={requestMessage}
               requestRunning={requestRunning}
               warning={warning}
-              interactionMode={interactionMode}
-              lastRequestMode={lastRequestMode}
+              debugOpen={debugOpen}
+              onDebugToggle={() => setDebugOpen(!debugOpen)}
             />
 
-            <ModelViewport
-              response={latestResponse}
-              viewer={manifest?.viewer ?? null}
-              diagnosticMode={viewerDiagnosticMode}
-              selectedSegment={selectedSegment}
-              setSelectedSegment={setSelectedSegment}
-              onViewerModeChange={setViewerMode}
-              onAppliedSegmentsChange={setAppliedSegments}
-              onWarning={setWarning}
-            />
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <ModelViewport
+                response={latestResponse}
+                baselineResponse={baselineResponse ?? sampleResponse}
+                viewer={manifest?.viewer ?? null}
+                diagnosticMode={viewerDiagnosticMode}
+                selectedSegment={selectedSegment}
+                setSelectedSegment={setSelectedSegment}
+                onViewerModeChange={setViewerMode}
+                onAppliedSegmentsChange={setAppliedSegments}
+                onWarning={setWarning}
+              />
+              <QuickStartCard />
+            </div>
 
             <DebugPanel
               open={debugOpen}

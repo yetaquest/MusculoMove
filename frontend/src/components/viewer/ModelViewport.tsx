@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { Html, OrbitControls } from '@react-three/drei'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { Matrix4, Object3D, Quaternion, Vector3 } from 'three'
+import { Color, Material, Matrix4, Mesh, Object3D, Quaternion, Vector3 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import type { NormalizedPoseResponse, ViewerConfig } from '../../types/api'
 import type { AppliedSegmentInfo, CameraPreset, ViewerMode } from '../../types/viewer'
@@ -17,6 +17,7 @@ import { Card } from '../ui/card'
 
 type ModelViewportProps = {
   response: NormalizedPoseResponse | null
+  baselineResponse: NormalizedPoseResponse | null
   viewer: ViewerConfig | null
   diagnosticMode: 'none' | 'frontend-limb-test'
   selectedSegment: string
@@ -52,6 +53,14 @@ const cameraPositions: Record<CameraPreset, [number, number, number]> = {
   side: [0, 1.35, 3.1],
   'three-quarter': [2.6, 1.7, 2.6],
 }
+const mildDeviationColor = new Color('#f3d54e')
+const severeDeviationColor = new Color('#d94a32')
+const deviationColorBuffer = new Color()
+const originalColorBuffer = new Color()
+
+type ColorableMaterial = Material & {
+  color?: Color
+}
 
 function canonicalizeViewerNodeName(name: string) {
   return name.replace(/[^A-Za-z0-9_]/g, '')
@@ -70,6 +79,7 @@ function resolveViewerAssetUrl(assetUrl: string) {
 
 export function ModelViewport({
   response,
+  baselineResponse,
   viewer,
   diagnosticMode,
   selectedSegment,
@@ -82,6 +92,20 @@ export function ModelViewport({
   const [failedAssetUrl, setFailedAssetUrl] = useState<string | null>(null)
   const currentAssetUrl = viewer?.assetUrl ?? null
   const opensimViewerAvailable = Boolean(viewer?.runtime.available && failedAssetUrl !== currentAssetUrl)
+  const opensimResponse = response?.source === 'backend' ? response : null
+  const handleLoadError = useCallback(
+    (message: string) => {
+      if (viewer) {
+        setFailedAssetUrl(viewer.assetUrl)
+      }
+      onWarning(message)
+    },
+    [onWarning, viewer],
+  )
+  const handleReady = useCallback(() => {
+    setFailedAssetUrl(null)
+    onWarning(null)
+  }, [onWarning])
 
   useEffect(() => {
     onViewerModeChange(opensimViewerAvailable ? 'opensim' : 'debug')
@@ -137,18 +161,13 @@ export function ModelViewport({
           {opensimViewerAvailable && viewer ? (
             <OpenSimBody
               key={viewer.assetUrl}
-              response={response}
+              response={opensimResponse}
+              baselineResponse={baselineResponse}
               diagnosticMode={diagnosticMode}
               viewer={viewer}
               onAppliedSegmentsChange={onAppliedSegmentsChange}
-              onLoadError={(message) => {
-                setFailedAssetUrl(viewer.assetUrl)
-                onWarning(message)
-              }}
-              onReady={() => {
-                setFailedAssetUrl(null)
-                onWarning(null)
-              }}
+              onLoadError={handleLoadError}
+              onReady={handleReady}
             />
           ) : (
             <DebugBody
@@ -195,6 +214,7 @@ function Ground() {
 
 function OpenSimBody({
   response,
+  baselineResponse,
   diagnosticMode,
   viewer,
   onAppliedSegmentsChange,
@@ -202,6 +222,7 @@ function OpenSimBody({
   onReady,
 }: {
   response: NormalizedPoseResponse | null
+  baselineResponse: NormalizedPoseResponse | null
   diagnosticMode: 'none' | 'frontend-limb-test'
   viewer: ViewerConfig
   onAppliedSegmentsChange: (segments: Record<string, AppliedSegmentInfo>) => void
@@ -209,6 +230,7 @@ function OpenSimBody({
   onReady: () => void
 }) {
   const [scene, setScene] = useState<Object3D | null>(null)
+  const [poseApplied, setPoseApplied] = useState(false)
   const nodesRef = useRef<Record<string, Object3D>>({})
   const scratchPosition = useRef(new Vector3())
   const scratchQuaternion = useRef(new Quaternion())
@@ -227,6 +249,7 @@ function OpenSimBody({
     let loadedScene: Object3D | null = null
     const loader = new GLTFLoader()
     nodesRef.current = {}
+    setPoseApplied(false)
     loader.load(
       assetUrl,
       (gltf) => {
@@ -241,6 +264,15 @@ function OpenSimBody({
             nodes[object.name] = object
             nodes[canonicalizeViewerNodeName(object.name)] = object
           }
+          const meshObject = object as Mesh
+          if (!meshObject.isMesh || !meshObject.material) {
+            return
+          }
+          if (Array.isArray(meshObject.material)) {
+            meshObject.material = meshObject.material.map(cloneViewerMaterial)
+            return
+          }
+          meshObject.material = cloneViewerMaterial(meshObject.material)
         })
         nodesRef.current = nodes
         setScene(nextScene)
@@ -274,6 +306,7 @@ function OpenSimBody({
     }
 
     const appliedSegments: Record<string, AppliedSegmentInfo> = {}
+    let appliedCount = 0
     scene.updateMatrixWorld(true)
     Object.entries(response.segmentTransforms).forEach(([segmentName, transform]) => {
       const nodeName = viewer.bodyNodes[segmentName] ?? null
@@ -297,6 +330,7 @@ function OpenSimBody({
       if (!node) {
         return
       }
+      appliedCount += 1
 
       const parentWorldMatrix = node.parent?.matrixWorld ?? identityMatrix
       scratchParentMatrix.current.copy(parentWorldMatrix).invert()
@@ -311,10 +345,24 @@ function OpenSimBody({
       node.quaternion.copy(scratchQuaternion.current)
       node.updateMatrix()
     })
+    Object.entries(viewer.bodyNodes).forEach(([segmentName, nodeName]) => {
+      const node =
+        nodesRef.current[nodeName] ?? nodesRef.current[canonicalizeViewerNodeName(nodeName)]
+      if (!node) {
+        return
+      }
+      const deviation = baselineResponse
+        ? calculateSegmentDeviation(response.segmentTransforms[segmentName], baselineResponse.segmentTransforms[segmentName])
+        : 0
+      applyDeviationColor(node, deviation)
+    })
     scene.updateMatrixWorld(true)
     onAppliedSegmentsChange(appliedSegments)
+    if (appliedCount > 0) {
+      setPoseApplied(true)
+    }
     invalidate()
-  }, [invalidate, onAppliedSegmentsChange, response, scene, viewer.bodyNodes])
+  }, [baselineResponse, invalidate, onAppliedSegmentsChange, response, scene, viewer.bodyNodes])
 
   useEffect(() => {
     if (!scene) {
@@ -393,6 +441,10 @@ function OpenSimBody({
     return <Html center>Loading OpenSim model…</Html>
   }
 
+  if (!poseApplied) {
+    return <Html center>Applying the initial posture…</Html>
+  }
+
   return <primitive object={scene} position={[0, 0, 0]} />
 }
 
@@ -409,6 +461,80 @@ function disposeSceneGraph(root: Object3D) {
     }
     disposableObject.material?.dispose?.()
   })
+}
+
+function calculateSegmentDeviation(current?: NormalizedPoseResponse['segmentTransforms'][string], baseline?: NormalizedPoseResponse['segmentTransforms'][string]) {
+  if (!current || !baseline) {
+    return 0
+  }
+
+  const translationDelta = Math.hypot(
+    current.translation_m[0] - baseline.translation_m[0],
+    current.translation_m[1] - baseline.translation_m[1],
+    current.translation_m[2] - baseline.translation_m[2],
+  )
+  const currentQuaternion = quaternionFromSegmentTransform(current)
+  const baselineQuaternion = quaternionFromSegmentTransform(baseline)
+  const rotationDelta = currentQuaternion.angleTo(baselineQuaternion)
+  return Math.min(1, Math.max(translationDelta / 0.08, rotationDelta / 0.35))
+}
+
+function quaternionFromSegmentTransform(transform: NormalizedPoseResponse['segmentTransforms'][string]) {
+  const matrix = applySegmentTransformToMatrix4(transform, new Matrix4())
+  return new Quaternion().setFromRotationMatrix(matrix)
+}
+
+function applyDeviationColor(root: Object3D, deviation: number) {
+  root.traverse((object) => {
+    const meshObject = object as Mesh
+    if (!meshObject.isMesh || !meshObject.material) {
+      return
+    }
+    if (Array.isArray(meshObject.material)) {
+      meshObject.material.forEach((material) => applyMaterialDeviationColor(material, deviation))
+      return
+    }
+    applyMaterialDeviationColor(meshObject.material, deviation)
+  })
+}
+
+function applyMaterialDeviationColor(
+  material: Material,
+  deviation: number,
+) {
+  const colorableMaterial = material as ColorableMaterial
+  if (!colorableMaterial.color?.isColor) {
+    return
+  }
+  const originalColor = colorableMaterial.userData.originalColor
+  if (!(originalColor instanceof Color)) {
+    return
+  }
+  originalColorBuffer.copy(originalColor)
+  if (deviation <= 0) {
+    colorableMaterial.color.copy(originalColorBuffer)
+    return
+  }
+  if (deviation < 0.5) {
+    deviationColorBuffer.copy(originalColorBuffer).lerp(mildDeviationColor, deviation * 2)
+    colorableMaterial.color.copy(deviationColorBuffer)
+    return
+  }
+  deviationColorBuffer
+    .copy(mildDeviationColor)
+    .lerp(severeDeviationColor, (deviation - 0.5) * 2)
+  colorableMaterial.color.copy(deviationColorBuffer)
+}
+
+function cloneViewerMaterial(material: Material) {
+  const clonedMaterial = material.clone() as ColorableMaterial
+  if (clonedMaterial.color?.isColor) {
+    clonedMaterial.userData = {
+      ...clonedMaterial.userData,
+      originalColor: clonedMaterial.color.clone(),
+    }
+  }
+  return clonedMaterial
 }
 
 function DebugBody({

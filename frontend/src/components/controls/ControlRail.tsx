@@ -37,6 +37,32 @@ const featuredPresets = [
   'glmax1',
 ]
 
+export function QuickStartCard() {
+  return (
+    <Card className="h-full p-5">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent-strong)]">
+          Quick Start
+        </p>
+        <p className="mt-2 font-[var(--serif)] text-xl text-[var(--ink)]">How to use the posture sandbox</p>
+      </div>
+
+      <div className="mt-4 rounded-[22px] border border-[var(--border)] bg-white/80 p-4 text-sm text-[var(--muted)]">
+        <ol className="space-y-3">
+          <li>1. Add one or two lower-body muscles from the list below.</li>
+          <li>2. Set side and severity, then let live preview solve a posture update or press `Update posture`.</li>
+          <li>3. Use `Optimize` any time you want to rerun the phase-1 passive compensation solve explicitly.</li>
+        </ol>
+      </div>
+
+      <div className="mt-4 rounded-[22px] bg-[var(--accent-soft)] px-4 py-3 text-sm text-[var(--ink)]">
+        Example: tighten `iliacus` and `psoas` on the right at `0.60`, let the solver update the
+        pose, then compare the pelvis, hip, and ankle posture in the viewport.
+      </div>
+    </Card>
+  )
+}
+
 export function ControlRail({
   catalog,
   selections,
@@ -61,28 +87,6 @@ export function ControlRail({
 
   return (
     <div className="flex flex-col gap-4">
-      <Card className="p-5">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent-strong)]">
-            Quick Start
-          </p>
-          <p className="mt-2 font-[var(--serif)] text-xl text-[var(--ink)]">How to use the posture sandbox</p>
-        </div>
-
-        <div className="mt-4 rounded-[22px] border border-[var(--border)] bg-white/80 p-4 text-sm text-[var(--muted)]">
-          <ol className="space-y-3">
-            <li>1. Add one or two lower-body muscles from the list below.</li>
-            <li>2. Set side and severity, then let live preview solve a posture update or press `Update posture`.</li>
-            <li>3. Use `Optimize` any time you want to rerun the phase-1 passive compensation solve explicitly.</li>
-          </ol>
-        </div>
-
-        <div className="mt-4 rounded-[22px] bg-[var(--accent-soft)] px-4 py-3 text-sm text-[var(--ink)]">
-          Example: tighten `iliacus` and `psoas` on the right at `0.60`, let the solver update the
-          pose, then compare the pelvis, hip, and ankle posture in the viewport.
-        </div>
-      </Card>
-
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -120,7 +124,7 @@ export function ControlRail({
           </div>
         </div>
 
-        <div className="mt-5 max-h-60 overflow-auto rounded-[24px] border border-[var(--border)] bg-[var(--surface-strong)] p-2">
+        <div className="mt-5 max-h-52 overflow-auto rounded-[24px] border border-[var(--border)] bg-[var(--surface-strong)] p-2">
           <div className="grid gap-2">
             {availableEntries.slice(0, 18).map((entry) => (
               <button

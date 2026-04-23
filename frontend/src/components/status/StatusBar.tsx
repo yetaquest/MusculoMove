@@ -1,22 +1,22 @@
-import { Activity, AlertTriangle, Orbit, TimerReset } from 'lucide-react'
+import { Activity, AlertTriangle } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { Badge } from '../ui/badge'
+import { Button } from '../ui/button'
 import { Card } from '../ui/card'
 
 type StatusBarProps = {
   requestMessage: string
   requestRunning: boolean
   warning: string | null
-  interactionMode: 'debounced' | 'release'
-  lastRequestMode: 'evaluate' | 'optimize' | 'fallback'
+  debugOpen: boolean
+  onDebugToggle: () => void
 }
 
 export function StatusBar({
   requestMessage,
   requestRunning,
   warning,
-  interactionMode,
-  lastRequestMode,
+  debugOpen,
+  onDebugToggle,
 }: StatusBarProps) {
   return (
     <div className="flex flex-col gap-3">
@@ -33,14 +33,9 @@ export function StatusBar({
               <p className="text-sm text-[var(--muted)]">{requestMessage}</p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge className="bg-[var(--accent-soft)] text-[var(--accent-strong)]">{lastRequestMode}</Badge>
-            <Badge>{interactionMode === 'debounced' ? 'Live preview' : 'Release to preview'}</Badge>
-            <Badge className="gap-2">
-              {interactionMode === 'debounced' ? <Orbit className="size-3.5" /> : <TimerReset className="size-3.5" />}
-              {interactionMode === 'debounced' ? 'Auto evaluate' : 'Manual preview'}
-            </Badge>
-          </div>
+          <Button variant={debugOpen ? 'primary' : 'secondary'} size="sm" onClick={onDebugToggle}>
+            {debugOpen ? 'Hide debug' : 'Show debug'}
+          </Button>
         </div>
       </Card>
 
