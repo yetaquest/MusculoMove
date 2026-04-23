@@ -47,22 +47,7 @@ export const useAppStore = create<AppState>((set) => ({
   manifest: null,
   latestResponse: null,
   sampleResponse: null,
-  activeSelections: [
-    {
-      id: nextSelectionId(),
-      baseName: 'iliacus',
-      side: 'right',
-      severity: 0.6,
-      maxShorteningFraction: 0.2,
-    },
-    {
-      id: nextSelectionId(),
-      baseName: 'psoas',
-      side: 'right',
-      severity: 0.6,
-      maxShorteningFraction: 0.2,
-    },
-  ],
+  activeSelections: [],
   warning: null,
   debugOpen: false,
   selectedSegment: 'pelvis',

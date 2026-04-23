@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { fetchManifest, fetchSampleResponse, postEvaluate, postOptimize } from './api/client'
 import { normalizeManifestResponse, normalizePoseResponse } from './api/normalize'
-import { ControlRail, QuickStartCard } from './components/controls/ControlRail'
+import { ActiveSelectionsCard, ControlRail } from './components/controls/ControlRail'
 import { DebugPanel } from './components/debug/DebugPanel'
 import { StatusBar } from './components/status/StatusBar'
 import { ModelViewport } from './components/viewer/ModelViewport'
@@ -14,7 +14,12 @@ import type { AppliedSegmentInfo } from './types/viewer'
 
 const debugTestPose = {
   pelvis_tilt: -0.22,
+  pelvis_list: 0.12,
+  pelvis_rotation: 0.16,
   lumbar_extension: 0.16,
+  hip_flexion_l: 0.22,
+  knee_angle_l: 0.18,
+  ankle_angle_l: -0.12,
   hip_flexion_r: 0.68,
   knee_angle_r: 0.82,
   ankle_angle_r: -0.28,
@@ -22,7 +27,12 @@ const debugTestPose = {
 
 const neutralPhase1Pose = {
   pelvis_tilt: 0,
+  pelvis_list: 0,
+  pelvis_rotation: 0,
   lumbar_extension: 0,
+  hip_flexion_l: 0,
+  knee_angle_l: 0,
+  ankle_angle_l: 0,
   hip_flexion_r: 0,
   knee_angle_r: 0,
   ankle_angle_r: 0,
@@ -37,7 +47,7 @@ async function requestOptimize() {
   }
   useAppStore.setState({
     requestRunning: true,
-    requestMessage: 'Running the phase-1 passive optimizer…',
+    requestMessage: 'Running the bilateral pelvis-aware passive optimizer…',
     lastRequestMode: 'optimize',
   })
   const requests = selectionsToRequests(state.activeSelections, state.manifest.muscleCatalog)
@@ -99,10 +109,10 @@ function App() {
   const warning = useAppStore((state) => state.warning)
   const debugOpen = useAppStore((state) => state.debugOpen)
   const selectedSegment = useAppStore((state) => state.selectedSegment)
-  const requestMessage = useAppStore((state) => state.requestMessage)
   const requestRunning = useAppStore((state) => state.requestRunning)
   const interactionMode = useAppStore((state) => state.interactionMode)
   const setManifest = useAppStore((state) => state.setManifest)
+  const setLatestResponse = useAppStore((state) => state.setLatestResponse)
   const setSampleResponse = useAppStore((state) => state.setSampleResponse)
   const addSelection = useAppStore((state) => state.addSelection)
   const updateSelection = useAppStore((state) => state.updateSelection)
@@ -173,7 +183,7 @@ function App() {
   }, [setManifest, setSampleResponse, setViewerMode, setWarning])
 
   useEffect(() => {
-    if (!manifest || !baselineResponse || interactionMode !== 'debounced') {
+    if (!manifest || !baselineResponse || interactionMode !== 'debounced' || activeSelections.length === 0) {
       return
     }
 
@@ -197,12 +207,12 @@ function App() {
 
   return (
     <div className="musculomove-shell">
-      <main className="relative z-10 mx-auto max-w-[1680px] px-4 py-4 lg:px-6 lg:py-6">
-        <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+      <main className="relative z-10 mx-auto h-[100svh] max-w-[1680px] overflow-hidden px-4 py-4 lg:px-6 lg:py-6">
+        <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
           <motion.section
             initial={{ opacity: 0, x: -12 }}
             animate={{ opacity: 1, x: 0 }}
-            className="xl:sticky xl:top-6 xl:self-start"
+            className="min-h-0 xl:self-stretch"
           >
             <ControlRail
               catalog={manifest?.muscleCatalog ?? []}
@@ -214,7 +224,9 @@ function App() {
               removeSelection={removeSelection}
               clearSelections={() => {
                 clearSelections()
-                void requestPosturePreview()
+                if (baselineResponse) {
+                  setLatestResponse(baselineResponse)
+                }
               }}
               optimize={() => void requestOptimize()}
               commitEvaluate={() => void requestPosturePreview()}
@@ -224,17 +236,16 @@ function App() {
           <motion.section
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="space-y-4"
+            className="flex min-h-0 flex-col gap-4 overflow-hidden"
           >
             <StatusBar
-              requestMessage={requestMessage}
               requestRunning={requestRunning}
               warning={warning}
               debugOpen={debugOpen}
               onDebugToggle={() => setDebugOpen(!debugOpen)}
             />
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
               <ModelViewport
                 response={latestResponse}
                 baselineResponse={baselineResponse ?? sampleResponse}
@@ -246,26 +257,42 @@ function App() {
                 onAppliedSegmentsChange={setAppliedSegments}
                 onWarning={setWarning}
               />
-              <QuickStartCard />
+              <ActiveSelectionsCard
+                selections={activeSelections}
+                requestRunning={requestRunning}
+                interactionMode={interactionMode}
+                updateSelection={updateSelection}
+                removeSelection={removeSelection}
+                clearSelections={() => {
+                  clearSelections()
+                  if (baselineResponse) {
+                    setLatestResponse(baselineResponse)
+                  }
+                }}
+                optimize={() => void requestOptimize()}
+                commitEvaluate={() => void requestPosturePreview()}
+              />
             </div>
 
-            <DebugPanel
-              open={debugOpen}
-              response={latestResponse}
-              selectedSegment={selectedSegment}
-              setSelectedSegment={setSelectedSegment}
-              appliedSegments={appliedSegments}
-              requestRunning={requestRunning}
-              applyDebugPose={() =>
-                void requestDebugPose(debugTestPose, 'Applying an obvious debug pose…')
-              }
-              resetDebugPose={() =>
-                void requestDebugPose(neutralPhase1Pose, 'Resetting the debug pose…')
-              }
-              diagnosticMode={viewerDiagnosticMode}
-              enableFrontendLimbTest={() => setViewerDiagnosticMode('frontend-limb-test')}
-              clearFrontendLimbTest={() => setViewerDiagnosticMode('none')}
-            />
+            <div className="min-h-0 overflow-auto">
+              <DebugPanel
+                open={debugOpen}
+                response={latestResponse}
+                selectedSegment={selectedSegment}
+                setSelectedSegment={setSelectedSegment}
+                appliedSegments={appliedSegments}
+                requestRunning={requestRunning}
+                applyDebugPose={() =>
+                  void requestDebugPose(debugTestPose, 'Applying an obvious debug pose…')
+                }
+                resetDebugPose={() =>
+                  void requestDebugPose(neutralPhase1Pose, 'Resetting the debug pose…')
+                }
+                diagnosticMode={viewerDiagnosticMode}
+                enableFrontendLimbTest={() => setViewerDiagnosticMode('frontend-limb-test')}
+                clearFrontendLimbTest={() => setViewerDiagnosticMode('none')}
+              />
+            </div>
           </motion.section>
         </div>
       </main>

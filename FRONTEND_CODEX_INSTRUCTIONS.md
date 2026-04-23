@@ -65,7 +65,12 @@ Where:
 
 ### Current regularization weights to preserve
 - `pelvis_tilt: 2.0`
+- `pelvis_list: 2.0`
+- `pelvis_rotation: 2.0`
 - `lumbar_extension: 1.5`
+- `hip_flexion_l: 1.0`
+- `knee_angle_l: 0.5`
+- `ankle_angle_l: 0.5`
 - `hip_flexion_r: 1.0`
 - `knee_angle_r: 0.5`
 - `ankle_angle_r: 0.5`
@@ -632,4 +637,3 @@ Preferred production avatar source: **Ready Player Me full-body GLB**.
 Implementation must still stay generic enough to swap in any local humanoid GLB later.
 
 Ready Player Me is the preferred source because it aligns well with a web React/Three pipeline and supports downloadable GLB avatars; their ecosystem also includes a React/three.js display library. But because account/licensing flow can vary by project, the repo itself should not depend on live RPM integration for v1. ([landing.readyplayer.me][1])
-

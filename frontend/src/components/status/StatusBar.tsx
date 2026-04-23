@@ -4,7 +4,6 @@ import { Button } from '../ui/button'
 import { Card } from '../ui/card'
 
 type StatusBarProps = {
-  requestMessage: string
   requestRunning: boolean
   warning: string | null
   debugOpen: boolean
@@ -12,7 +11,6 @@ type StatusBarProps = {
 }
 
 export function StatusBar({
-  requestMessage,
   requestRunning,
   warning,
   debugOpen,
@@ -30,7 +28,6 @@ export function StatusBar({
               <p className="font-medium text-[var(--ink)]">
                 {requestRunning ? 'Processing current request' : 'Viewer ready'}
               </p>
-              <p className="text-sm text-[var(--muted)]">{requestMessage}</p>
             </div>
           </div>
           <Button variant={debugOpen ? 'primary' : 'secondary'} size="sm" onClick={onDebugToggle}>

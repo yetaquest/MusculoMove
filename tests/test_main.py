@@ -38,7 +38,7 @@ class ManifestTests(unittest.TestCase):
 
     def test_inner_bounds_stay_inside_outer_bounds(self) -> None:
         outer = main.outer_hard_bounds_from_manifest(self.manifest)
-        for coordinate_name, inner_bounds in main.INNER_OPTIMIZATION_BOUNDS_PHASE_1.items():
+        for coordinate_name, inner_bounds in main.INNER_OPTIMIZATION_BOUNDS_ACTIVE.items():
             outer_bounds = outer[coordinate_name]
             self.assertGreaterEqual(inner_bounds[0], outer_bounds[0])
             self.assertLessEqual(inner_bounds[1], outer_bounds[1])
@@ -67,14 +67,24 @@ class ObjectiveTests(unittest.TestCase):
         }
         defaults = {
             "pelvis_tilt": 0.0,
+            "pelvis_list": 0.0,
+            "pelvis_rotation": 0.0,
             "lumbar_extension": 0.0,
+            "hip_flexion_l": 0.0,
+            "knee_angle_l": 0.0,
+            "ankle_angle_l": 0.0,
             "hip_flexion_r": 0.0,
             "knee_angle_r": 0.0,
             "ankle_angle_r": 0.0,
         }
         pose = {
             "pelvis_tilt": math.radians(10.0),
+            "pelvis_list": math.radians(4.0),
+            "pelvis_rotation": math.radians(-6.0),
             "lumbar_extension": 0.0,
+            "hip_flexion_l": math.radians(-4.0),
+            "knee_angle_l": math.radians(3.0),
+            "ankle_angle_l": math.radians(2.0),
             "hip_flexion_r": math.radians(5.0),
             "knee_angle_r": math.radians(2.0),
             "ankle_angle_r": math.radians(-3.0),
@@ -91,6 +101,11 @@ class ObjectiveTests(unittest.TestCase):
         global_term = 0.2**2 + 0.1**2
         regularization = (
             2.0 * math.radians(10.0) ** 2
+            + 2.0 * math.radians(4.0) ** 2
+            + 2.0 * math.radians(-6.0) ** 2
+            + 1.0 * math.radians(-4.0) ** 2
+            + 0.5 * math.radians(3.0) ** 2
+            + 0.5 * math.radians(2.0) ** 2
             + 1.0 * math.radians(5.0) ** 2
             + 0.5 * math.radians(2.0) ** 2
             + 0.5 * math.radians(-3.0) ** 2

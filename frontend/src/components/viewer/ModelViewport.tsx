@@ -113,7 +113,7 @@ export function ModelViewport({
 
   return (
     <Card className="viewer-panel relative overflow-hidden p-0">
-      <div className="relative h-[540px] w-full sm:h-[620px] xl:h-[calc(100svh-13rem)] xl:min-h-[720px] xl:max-h-[940px]">
+      <div className="relative h-[480px] w-full sm:h-[560px] xl:h-full xl:min-h-0">
         <div className="absolute inset-x-4 top-4 z-20 flex flex-wrap items-start justify-between gap-3">
           <div className="rounded-[22px] border border-[var(--border)] bg-white/86 p-2 shadow-[0_12px_28px_rgba(31,36,31,0.08)] backdrop-blur">
             <div className="flex flex-wrap gap-2">

@@ -29,9 +29,10 @@ VIEWER_BACKEND_PATH = REPO_ROOT / "tools" / "opensim-viewer-backend"
 VIEWER_MODEL_ROUTE = "/api/viewer/model.gltf"
 LOWER_BODY_ANALYSIS_CUTOFF = "below the torso"
 GLOBAL_OBJECTIVE_WEIGHT = 0.10
-ACTIVE_OPTIMIZER_PHASE = "ACTIVE OPTIMIZER PHASE 1"
+ACTIVE_OPTIMIZER_PHASE = "ACTIVE OPTIMIZER PHASE 2"
 ACTIVE_OPTIMIZER_DEBUG = (
-    "ACTIVE OPTIMIZER PHASE 1: pelvis_tilt, lumbar_extension, "
+    "ACTIVE OPTIMIZER PHASE 2: pelvis_tilt, pelvis_list, pelvis_rotation, "
+    "lumbar_extension, hip_flexion_l, knee_angle_l, ankle_angle_l, "
     "hip_flexion_r, knee_angle_r, ankle_angle_r"
 )
 EVALUATION_ORDER = [
@@ -48,27 +49,41 @@ EVALUATION_ORDER = [
 
 ACTIVE_OPTIMIZER_COORDINATES = (
     "pelvis_tilt",
+    "pelvis_list",
+    "pelvis_rotation",
     "lumbar_extension",
+    "hip_flexion_l",
+    "knee_angle_l",
+    "ankle_angle_l",
     "hip_flexion_r",
     "knee_angle_r",
     "ankle_angle_r",
 )
-FUTURE_PHASE_2_COORDINATES = ("pelvis_list", "pelvis_rotation")
-FUTURE_PHASE_3_COORDINATES = ("hip_rotation_r",)
-LATER_ONLY_COORDINATES = ("subtalar_angle_r",)
+FUTURE_PHASE_3_COORDINATES = ("hip_rotation_l", "hip_rotation_r")
+LATER_ONLY_COORDINATES = ("subtalar_angle_l", "subtalar_angle_r")
 
 REGULARIZATION_WEIGHTS = {
     "pelvis_tilt": 2.0,
+    "pelvis_list": 2.0,
+    "pelvis_rotation": 2.0,
     "lumbar_extension": 1.5,
+    "hip_flexion_l": 1.0,
+    "knee_angle_l": 0.5,
+    "ankle_angle_l": 0.5,
     "hip_flexion_r": 1.0,
     "knee_angle_r": 0.5,
     "ankle_angle_r": 0.5,
 }
 
-# Standing-like inner bounds used for the active phase-1 search.
-INNER_OPTIMIZATION_BOUNDS_PHASE_1 = {
+# Standing-like inner bounds used for the active bilateral, pelvis-aware search.
+INNER_OPTIMIZATION_BOUNDS_ACTIVE = {
     "pelvis_tilt": (-math.radians(20.0), math.radians(20.0)),
+    "pelvis_list": (-math.radians(12.0), math.radians(12.0)),
+    "pelvis_rotation": (-math.radians(12.0), math.radians(12.0)),
     "lumbar_extension": (-math.radians(15.0), math.radians(15.0)),
+    "hip_flexion_l": (-math.radians(15.0), math.radians(45.0)),
+    "knee_angle_l": (0.0, math.radians(45.0)),
+    "ankle_angle_l": (-math.radians(15.0), math.radians(20.0)),
     "hip_flexion_r": (-math.radians(15.0), math.radians(45.0)),
     "knee_angle_r": (0.0, math.radians(45.0)),
     "ankle_angle_r": (-math.radians(15.0), math.radians(20.0)),
@@ -371,7 +386,7 @@ def validate_project_configuration(manifest: ModelManifest) -> dict[str, Any]:
     group_only = sorted(set(covered) - set(lower_body_manifest_muscles))
     manifest_only = sorted(set(lower_body_manifest_muscles) - set(covered))
 
-    for coordinate_name, (inner_min, inner_max) in INNER_OPTIMIZATION_BOUNDS_PHASE_1.items():
+    for coordinate_name, (inner_min, inner_max) in INNER_OPTIMIZATION_BOUNDS_ACTIVE.items():
         coordinate = manifest.coordinates[coordinate_name]
         if inner_min < coordinate.range_min or inner_max > coordinate.range_max:
             raise ValueError(
@@ -379,9 +394,13 @@ def validate_project_configuration(manifest: ModelManifest) -> dict[str, Any]:
                 f"{(inner_min, inner_max)} vs {(coordinate.range_min, coordinate.range_max)}"
             )
 
-    phase_1_missing = [name for name in ACTIVE_OPTIMIZER_COORDINATES if name not in manifest.coordinates]
-    if phase_1_missing:
-        raise ValueError(f"Active optimizer coordinates missing from model: {phase_1_missing}")
+    active_coordinate_missing = [
+        name for name in ACTIVE_OPTIMIZER_COORDINATES if name not in manifest.coordinates
+    ]
+    if active_coordinate_missing:
+        raise ValueError(
+            f"Active optimizer coordinates missing from model: {active_coordinate_missing}"
+        )
 
     return {
         "model_path": ACTIVE_MODEL_RELATIVE_PATH,
@@ -831,10 +850,10 @@ class OpenSimEvaluator:
         }
 
 
-class PhaseOneOptimizer:
+class ActivePhaseOptimizer:
     def __init__(self, evaluator: OpenSimEvaluator) -> None:
         self.evaluator = evaluator
-        self.bounds = INNER_OPTIMIZATION_BOUNDS_PHASE_1
+        self.bounds = INNER_OPTIMIZATION_BOUNDS_ACTIVE
 
     def _clamp(self, coordinate_name: str, value: float) -> float:
         lower, upper = self.bounds[coordinate_name]
@@ -911,7 +930,6 @@ class PhaseOneOptimizer:
         best_result["optimizer"] = {
             "phase": ACTIVE_OPTIMIZER_PHASE,
             "active_coordinates": list(ACTIVE_OPTIMIZER_COORDINATES),
-            "future_phase_2_coordinates": list(FUTURE_PHASE_2_COORDINATES),
             "future_phase_3_coordinates": list(FUTURE_PHASE_3_COORDINATES),
             "later_only_coordinates": list(LATER_ONLY_COORDINATES),
             "bounds_rad": {
@@ -942,8 +960,8 @@ def manifest_summary(manifest: ModelManifest | None = None) -> dict[str, Any]:
             lower_body_groups,
         ),
         "lower_body_groups": lower_body_groups,
-        "inner_optimization_bounds_phase_1_rad": {
-            name: list(bounds) for name, bounds in INNER_OPTIMIZATION_BOUNDS_PHASE_1.items()
+        "inner_optimization_bounds_active_rad": {
+            name: list(bounds) for name, bounds in INNER_OPTIMIZATION_BOUNDS_ACTIVE.items()
         },
         "outer_hard_bounds_rad": {
             name: list(bounds) for name, bounds in outer_hard_bounds_from_manifest(resolved_manifest).items()
@@ -1003,7 +1021,7 @@ def serve_api(host: str, port: int) -> int:
     manifest = load_model_manifest()
     validate_project_configuration(manifest)
     evaluator = OpenSimEvaluator(manifest)
-    optimizer = PhaseOneOptimizer(evaluator)
+    optimizer = ActivePhaseOptimizer(evaluator)
     manifest_payload = manifest_summary(manifest)
 
     class MusculoMoveApiHandler(BaseHTTPRequestHandler):
@@ -1091,7 +1109,7 @@ def serve_api(host: str, port: int) -> int:
                     self._send_json(
                         build_api_payload(
                             mode="optimize",
-                            message="Phase-1 passive optimization complete.",
+                            message="Phase-2 bilateral passive optimization complete.",
                             payload=payload,
                         )
                     )
@@ -1140,7 +1158,10 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate = subparsers.add_parser("evaluate", help="Evaluate a static pose request from JSON.")
     evaluate.add_argument("--request", required=True, type=Path, help="Path to an evaluation JSON file.")
 
-    optimize = subparsers.add_parser("optimize", help="Run the phase-1 passive optimizer from JSON.")
+    optimize = subparsers.add_parser(
+        "optimize",
+        help="Run the active bilateral passive optimizer from JSON.",
+    )
     optimize.add_argument("--request", required=True, type=Path, help="Path to an optimization JSON file.")
 
     serve = subparsers.add_parser("serve", help="Run a small HTTP API for the frontend.")
@@ -1173,7 +1194,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         if args.command == "optimize":
             request = OptimizationRequest.from_mapping(_read_json(args.request))
-            optimizer = PhaseOneOptimizer(evaluator)
+            optimizer = ActivePhaseOptimizer(evaluator)
             _print_json(optimizer.optimize(request))
             return 0
     except OpenSimRuntimeUnavailable as exc:

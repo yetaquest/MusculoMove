@@ -6,7 +6,12 @@ import { Button } from '../ui/button'
 
 const phase1Coordinates = [
   'pelvis_tilt',
+  'pelvis_list',
+  'pelvis_rotation',
   'lumbar_extension',
+  'hip_flexion_l',
+  'knee_angle_l',
+  'ankle_angle_l',
   'hip_flexion_r',
   'knee_angle_r',
   'ankle_angle_r',
@@ -60,7 +65,7 @@ export function DebugPanel({
         <div>
           <p className="font-[var(--serif)] text-lg text-[var(--ink)]">Debug inspector</p>
           <p className="text-sm text-[var(--muted)]">
-            Matrix-first backend data, mapped for the viewer. Non-zero phase-1 coordinates confirm
+            Matrix-first backend data, mapped for the viewer. Non-zero active coordinates confirm
             the model received a new posture solution.
           </p>
         </div>
@@ -100,7 +105,7 @@ export function DebugPanel({
         </div>
 
         <DebugMatrix
-          title="Phase-1 pose"
+          title="Active pose"
           lines={phase1Pose.map(
             ({ coordinate, value }) =>
               `${coordinate}: ${value.toFixed(4)} rad (${radToDeg(value).toFixed(2)} deg)`,

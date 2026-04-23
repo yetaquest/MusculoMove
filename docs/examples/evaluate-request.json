@@ -1,7 +1,12 @@
 {
   "pose": {
     "pelvis_tilt": -0.05,
+    "pelvis_list": 0.02,
+    "pelvis_rotation": 0.01,
     "lumbar_extension": 0.03,
+    "hip_flexion_l": 0.04,
+    "knee_angle_l": 0.02,
+    "ankle_angle_l": -0.01,
     "hip_flexion_r": 0.17,
     "knee_angle_r": 0.09,
     "ankle_angle_r": -0.03

@@ -13,7 +13,12 @@
   ],
   "seed_pose": {
     "pelvis_tilt": 0.0,
+    "pelvis_list": 0.0,
+    "pelvis_rotation": 0.0,
     "lumbar_extension": 0.0,
+    "hip_flexion_l": 0.0,
+    "knee_angle_l": 0.0,
+    "ankle_angle_l": 0.0,
     "hip_flexion_r": 0.0,
     "knee_angle_r": 0.0,
     "ankle_angle_r": 0.0

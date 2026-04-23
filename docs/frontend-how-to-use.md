@@ -37,8 +37,8 @@ npm run dev
 
 1. Add or remove lower-body muscle tightening selections from the left rail.
 2. Adjust severity on `[0, 1]`.
-3. Use `Evaluate` for the current static pose preview.
-4. Use `Optimize` for the phase-1 compensation solve.
+3. The compact muscle grid stays scrollable inside the card instead of growing the page.
+4. Use `Optimize` for the bilateral pelvis-aware compensation solve.
 5. Use camera preset buttons for `Front`, `Side`, and `3/4`.
 6. Open `Show debug` to inspect segment transforms, node mappings, and quaternions.
 

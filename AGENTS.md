@@ -181,33 +181,33 @@ Rajagopal-specific note:
 
 ## Optimizer
 
-### Active optimizer phase 1
-
-Keep the current 5-DOF subset until stable:
-
-* `pelvis_tilt`
-* `lumbar_extension`
-* `hip_flexion_r`
-* `knee_angle_r`
-* `ankle_angle_r` 
-
 ### Active optimizer phase 2
 
-After phase 1 is stable, add together:
+The active optimizer is now on the bilateral, pelvis-aware subset:
 
+* `pelvis_tilt`
 * `pelvis_list`
-* `pelvis_rotation` 
+* `pelvis_rotation`
+* `lumbar_extension`
+* `hip_flexion_l`
+* `knee_angle_l`
+* `ankle_angle_l`
+* `hip_flexion_r`
+* `knee_angle_r`
+* `ankle_angle_r`
 
 ### Active optimizer phase 3
 
-After pelvis rotational behavior is stable, add:
+After the bilateral pelvis rotational behavior is stable, add together:
 
+* `hip_rotation_l`
 * `hip_rotation_r` 
 
 ### Later only if needed
 
-* consider `subtalar_angle_r` later
-* do not add it before `hip_rotation_r` 
+* consider `subtalar_angle_l`
+* consider `subtalar_angle_r`
+* do not add them before the bilateral hip-rotation coordinates 
 
 Rules:
 
@@ -293,7 +293,12 @@ Rules:
 ### Current regularization weights to preserve
 
 * `pelvis_tilt`: 2.0
+* `pelvis_list`: 2.0
+* `pelvis_rotation`: 2.0
 * `lumbar_extension`: 1.5
+* `hip_flexion_l`: 1.0
+* `knee_angle_l`: 0.5
+* `ankle_angle_l`: 0.5
 * `hip_flexion_r`: 1.0
 * `knee_angle_r`: 0.5
 * `ankle_angle_r`: 0.5 
@@ -482,9 +487,9 @@ Then run the smallest next useful test.
 3. Reproduce stable pose evaluation with the new model.
 4. Return full-body transforms cleanly.
 5. Keep lower-body muscle analysis stable and JSON-friendly.
-6. Keep the optimizer on the phase-1 subset until behavior is stable.
-7. Add `pelvis_list` and `pelvis_rotation` together only after that.
-8. Add `hip_rotation_r` after pelvis rotational behavior is stable.
+6. Keep the optimizer on the active bilateral pelvis-aware subset until behavior is stable.
+7. Add `hip_rotation_l` and `hip_rotation_r` together only after that.
+8. Only then consider bilateral subtalar coordinates if needed.
 9. Only then move farther into frontend rendering.
 
 ---
