@@ -18,24 +18,8 @@ type ControlRailProps = {
   removeSelection: (id: string) => void
   clearSelections: () => void
   optimize: () => void
-  commitEvaluate: () => void
+  commitOptimize: () => void
 }
-
-const featuredPresets = [
-  'iliacus',
-  'psoas',
-  'recfem',
-  'bflh',
-  'bfsh',
-  'semiten',
-  'semimem',
-  'soleus',
-  'gasmed',
-  'gaslat',
-  'tibant',
-  'glmed1',
-  'glmax1',
-]
 
 export function ControlRail({
   catalog,
@@ -47,12 +31,9 @@ export function ControlRail({
     entry.label.toLowerCase().includes(deferredQuery.toLowerCase()) ||
     entry.baseName.includes(deferredQuery.toLowerCase()),
   )
-  const featuredEntries = featuredPresets
-    .map((preset) => catalog.find((entry) => entry.baseName === preset))
-    .filter(Boolean) as MuscleCatalogEntry[]
 
   return (
-    <Card className="flex h-full min-h-0 flex-col overflow-hidden p-4">
+    <Card className="flex h-full min-h-0 flex-col overflow-hidden p-3">
       <div>
         <p className="font-[var(--serif)] text-xl text-[var(--ink)]">Lower-body tightness</p>
         <p className="mt-1 text-sm text-[var(--muted)]">
@@ -60,7 +41,7 @@ export function ControlRail({
         </p>
       </div>
 
-      <div className="mt-4 rounded-[22px] border border-[var(--border)] bg-white px-4 py-3">
+      <div className="mt-3 rounded-[10px] border border-[var(--border)] bg-white px-3 py-2.5">
         <div className="flex items-center gap-3">
           <Search className="size-4 text-[var(--muted)]" />
           <input
@@ -72,34 +53,17 @@ export function ControlRail({
         </div>
       </div>
 
-      <div className="mt-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
-          Featured
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {featuredEntries.map((entry) => (
-            <button
-              key={entry.baseName}
-              onClick={() => addSelection(entry.baseName)}
-              className="rounded-full border border-[var(--border)] bg-[var(--surface-strong)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--ink)] transition hover:border-[var(--accent)] hover:bg-white"
-            >
-              {entry.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-[var(--border)] bg-[var(--surface-strong)] p-2">
-        <div className="mb-2 px-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
+      <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[10px] border border-[var(--border)] bg-[var(--surface-strong)] p-2">
+        <div className="mb-2 border-b border-[var(--border)] px-1 pb-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
           All muscles
         </div>
         <div className="min-h-0 flex-1 overflow-auto pr-1">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-1.5">
             {availableEntries.map((entry) => (
               <button
                 key={entry.baseName}
                 onClick={() => addSelection(entry.baseName)}
-                className="rounded-[18px] border border-transparent bg-white/65 px-3 py-3 text-left transition hover:border-[var(--accent)] hover:bg-white"
+                className="rounded-[8px] border border-transparent bg-white/75 px-3 py-2.5 text-left transition hover:border-[var(--accent)] hover:bg-white"
               >
                 <div>
                   <p className="text-sm font-medium leading-tight text-[var(--ink)]">{entry.label}</p>
@@ -122,7 +86,7 @@ export function ActiveSelectionsCard({
   removeSelection,
   clearSelections,
   optimize,
-  commitEvaluate,
+  commitOptimize,
 }: Pick<
   ControlRailProps,
   | 'selections'
@@ -132,10 +96,10 @@ export function ActiveSelectionsCard({
   | 'removeSelection'
   | 'clearSelections'
   | 'optimize'
-  | 'commitEvaluate'
+  | 'commitOptimize'
 >) {
   return (
-    <Card className="flex h-full min-h-0 flex-col overflow-hidden p-4">
+    <Card className="flex h-full min-h-0 flex-col overflow-hidden p-3">
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="font-[var(--serif)] text-lg text-[var(--ink)]">Active selections</p>
@@ -153,7 +117,7 @@ export function ActiveSelectionsCard({
 
       <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-auto pr-1">
         {selections.length === 0 ? (
-          <div className="rounded-[24px] border border-dashed border-[var(--border)] bg-[var(--surface-strong)] px-4 py-8 text-center text-sm text-[var(--muted)]">
+          <div className="rounded-[10px] border border-dashed border-[var(--border)] bg-[var(--surface-strong)] px-4 py-8 text-center text-sm text-[var(--muted)]">
             Add one or more muscles from the tightness panel to start building a passive-tightness scenario.
           </div>
         ) : (
@@ -163,7 +127,7 @@ export function ActiveSelectionsCard({
               layout
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="rounded-[24px] border border-[var(--border)] bg-white p-4"
+              className="rounded-[10px] border border-[var(--border)] bg-white p-3"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -177,7 +141,7 @@ export function ActiveSelectionsCard({
                 </Button>
               </div>
 
-              <div className="mt-4 grid gap-4 md:grid-cols-[1fr_1.2fr]">
+              <div className="mt-3 grid gap-3">
                 <SideSelector
                   side={selection.side}
                   onChange={(side) => updateSelection(selection.id, { side })}
@@ -201,12 +165,12 @@ export function ActiveSelectionsCard({
                     }
                     onMouseUp={() => {
                       if (interactionMode === 'release') {
-                        commitEvaluate()
+                        commitOptimize()
                       }
                     }}
                     onTouchEnd={() => {
                       if (interactionMode === 'release') {
-                        commitEvaluate()
+                        commitOptimize()
                       }
                     }}
                   />
@@ -220,11 +184,11 @@ export function ActiveSelectionsCard({
       <div className="mt-4 flex flex-wrap gap-2">
         <Button onClick={optimize} disabled={requestRunning || selections.length === 0}>
           <Play className="size-4" />
-          Optimize
+          Optimize posture
         </Button>
         {interactionMode === 'release' ? (
-          <Button variant="secondary" onClick={commitEvaluate} disabled={requestRunning}>
-            Update posture
+          <Button variant="secondary" onClick={commitOptimize} disabled={requestRunning}>
+            Run optimize
           </Button>
         ) : null}
       </div>
@@ -243,15 +207,15 @@ function SideSelector({
   return (
     <div>
       <p className="mb-2 text-sm text-[var(--muted)]">Side</p>
-      <div className="grid grid-cols-3 gap-2 rounded-full bg-[var(--surface-strong)] p-1">
+      <div className="grid grid-cols-3 gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--surface-strong)] p-1.5">
         {options.map((option) => (
           <button
             key={option}
             onClick={() => onChange(option)}
-            className={`rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] transition ${
+            className={`min-w-0 rounded-[8px] border px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.08em] transition ${
               side === option
-                ? 'bg-[var(--accent)] text-white shadow-[0_12px_18px_rgba(18,87,82,0.18)]'
-                : 'text-[var(--muted)] hover:bg-white'
+                ? 'border-[var(--accent-strong)] bg-[var(--accent)] text-white shadow-[0_6px_14px_rgba(18,87,82,0.12)]'
+                : 'border-transparent bg-white/70 text-[var(--muted)] hover:border-[var(--border)] hover:bg-white'
             }`}
           >
             {option}

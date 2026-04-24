@@ -97,7 +97,14 @@ class ObjectiveTests(unittest.TestCase):
             selected_groups=["hamstrings_r"],
         )
 
-        selected_term = 0.2**2
+        selected_passive_term = 0.2**2
+        selected_worst_compartment_term = 0.3**2
+        selected_overlength_term = (1.1 - 1.0) ** 2
+        selected_term = (
+            selected_passive_term
+            + main.SELECTED_WORST_COMPARTMENT_WEIGHT * selected_worst_compartment_term
+            + main.SELECTED_OVERLENGTH_WEIGHT * selected_overlength_term
+        )
         global_term = 0.2**2 + 0.1**2
         regularization = (
             2.0 * math.radians(10.0) ** 2
@@ -111,13 +118,53 @@ class ObjectiveTests(unittest.TestCase):
             + 0.5 * math.radians(-3.0) ** 2
         )
 
+        self.assertAlmostEqual(result["selected_passive_term"], selected_passive_term)
+        self.assertAlmostEqual(
+            result["selected_worst_compartment_term"],
+            selected_worst_compartment_term,
+        )
+        self.assertAlmostEqual(result["selected_overlength_term"], selected_overlength_term)
         self.assertAlmostEqual(result["selected_term"], selected_term)
         self.assertAlmostEqual(result["global_term"], global_term)
         self.assertAlmostEqual(result["regularization_term"], regularization)
+        self.assertAlmostEqual(result["standing_term"], 0.0)
         self.assertAlmostEqual(
             result["total"],
             selected_term + main.GLOBAL_OBJECTIVE_WEIGHT * global_term + regularization,
         )
+
+    def test_standing_term_penalizes_support_and_foot_clearance(self) -> None:
+        standing = main.StandingMetric(
+            gravity_vector_m_s2=[0.0, -9.81, 0.0],
+            gravity_magnitude_m_s2=9.81,
+            center_of_mass_m=[0.0, 1.0, 0.0],
+            projected_center_of_mass_m=[0.0, 0.0, 0.0],
+            foot_landmarks_m={},
+            projected_foot_landmarks_m={},
+            support_polygon_m=[],
+            support_distance_outside_m=0.08,
+            heel_penetration_m=0.01,
+            toe_penetration_m=0.02,
+            heel_lift_m=0.04,
+        )
+
+        result = main.compute_objective_terms(
+            group_metrics={},
+            pose={name: 0.0 for name in main.REGULARIZATION_WEIGHTS},
+            coordinate_defaults={name: 0.0 for name in main.REGULARIZATION_WEIGHTS},
+            selected_groups=[],
+            standing_metrics=standing,
+        )
+
+        support_term = main.STANDING_SUPPORT_DISTANCE_WEIGHT * (0.08 - main.STANDING_SUPPORT_MARGIN_M) ** 2
+        penetration_term = main.STANDING_PENETRATION_WEIGHT * (0.01**2 + 0.02**2)
+        heel_lift_term = main.STANDING_HEEL_LIFT_WEIGHT * (0.04**2)
+
+        self.assertAlmostEqual(result["standing_support_term"], support_term)
+        self.assertAlmostEqual(result["standing_penetration_term"], penetration_term)
+        self.assertAlmostEqual(result["standing_heel_lift_term"], heel_lift_term)
+        self.assertAlmostEqual(result["standing_term"], support_term + penetration_term + heel_lift_term)
+        self.assertAlmostEqual(result["total"], support_term + penetration_term + heel_lift_term)
 
 
 class RequestParsingTests(unittest.TestCase):

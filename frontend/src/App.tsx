@@ -69,7 +69,7 @@ async function requestOptimize() {
   }
 }
 
-async function requestPosturePreview() {
+async function requestOptimizePreview() {
   await requestOptimize()
 }
 
@@ -200,7 +200,7 @@ function App() {
 
     const timeout = window.setTimeout(() => {
       lastAutoPreviewKeyRef.current = selectionKey
-      void requestPosturePreview()
+      void requestOptimizePreview()
     }, 320)
     return () => window.clearTimeout(timeout)
   }, [activeSelections, baselineResponse, interactionMode, manifest, requestRunning])
@@ -208,7 +208,7 @@ function App() {
   return (
     <div className="musculomove-shell">
       <main className="relative z-10 mx-auto h-[100svh] max-w-[1680px] overflow-hidden px-4 py-4 lg:px-6 lg:py-6">
-        <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
           <motion.section
             initial={{ opacity: 0, x: -12 }}
             animate={{ opacity: 1, x: 0 }}
@@ -229,7 +229,7 @@ function App() {
                 }
               }}
               optimize={() => void requestOptimize()}
-              commitEvaluate={() => void requestPosturePreview()}
+              commitOptimize={() => void requestOptimizePreview()}
             />
           </motion.section>
 
@@ -245,7 +245,7 @@ function App() {
               onDebugToggle={() => setDebugOpen(!debugOpen)}
             />
 
-            <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
               <ModelViewport
                 response={latestResponse}
                 baselineResponse={baselineResponse ?? sampleResponse}
@@ -270,7 +270,7 @@ function App() {
                   }
                 }}
                 optimize={() => void requestOptimize()}
-                commitEvaluate={() => void requestPosturePreview()}
+                commitOptimize={() => void requestOptimizePreview()}
               />
             </div>
 

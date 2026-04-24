@@ -29,6 +29,16 @@ VIEWER_BACKEND_PATH = REPO_ROOT / "tools" / "opensim-viewer-backend"
 VIEWER_MODEL_ROUTE = "/api/viewer/model.gltf"
 LOWER_BODY_ANALYSIS_CUTOFF = "below the torso"
 GLOBAL_OBJECTIVE_WEIGHT = 0.10
+SELECTED_WORST_COMPARTMENT_WEIGHT = 0.15
+SELECTED_OVERLENGTH_WEIGHT = 0.10
+SELECTED_OVERLENGTH_THRESHOLD = 1.0
+STANDING_SUPPORT_DISTANCE_WEIGHT = 25.0
+STANDING_PENETRATION_WEIGHT = 200.0
+STANDING_HEEL_LIFT_WEIGHT = 40.0
+STANDING_SUPPORT_MARGIN_M = 0.02
+STANDING_GROUND_CLEARANCE_TOLERANCE_M = 0.01
+STANDING_TOE_CONTACT_TOLERANCE_M = 0.03
+STANDING_HEEL_LIFT_TOLERANCE_M = 0.03
 ACTIVE_OPTIMIZER_PHASE = "ACTIVE OPTIMIZER PHASE 2"
 ACTIVE_OPTIMIZER_DEBUG = (
     "ACTIVE OPTIMIZER PHASE 2: pelvis_tilt, pelvis_list, pelvis_rotation, "
@@ -46,6 +56,12 @@ EVALUATION_ORDER = [
     "aggregate group outputs",
     "read segment transforms",
 ]
+STANDING_FOOT_LANDMARK_BODIES = {
+    "left_heel": "calcn_l",
+    "left_toe": "toes_l",
+    "right_heel": "calcn_r",
+    "right_toe": "toes_r",
+}
 
 ACTIVE_OPTIMIZER_COORDINATES = (
     "pelvis_tilt",
@@ -238,6 +254,21 @@ class GroupMetric:
     weighted_normalized_passive_force: float
     worst_compartment_normalized_passive_force: float
     mean_normalized_fiber_length: float
+
+
+@dataclass(frozen=True)
+class StandingMetric:
+    gravity_vector_m_s2: list[float]
+    gravity_magnitude_m_s2: float
+    center_of_mass_m: list[float]
+    projected_center_of_mass_m: list[float]
+    foot_landmarks_m: dict[str, list[float]]
+    projected_foot_landmarks_m: dict[str, list[float]]
+    support_polygon_m: list[list[float]]
+    support_distance_outside_m: float
+    heel_penetration_m: float
+    toe_penetration_m: float
+    heel_lift_m: float
 
 
 class OpenSimRuntimeUnavailable(RuntimeError):
@@ -596,6 +627,138 @@ def _rotation_to_matrix(rotation: Any) -> list[list[float]]:
     return [[float(rotation.get(row, column)) for column in range(3)] for row in range(3)]
 
 
+def _dot3(a: Sequence[float], b: Sequence[float]) -> float:
+    return sum(float(left) * float(right) for left, right in zip(a, b))
+
+
+def _cross3(a: Sequence[float], b: Sequence[float]) -> list[float]:
+    return [
+        float(a[1]) * float(b[2]) - float(a[2]) * float(b[1]),
+        float(a[2]) * float(b[0]) - float(a[0]) * float(b[2]),
+        float(a[0]) * float(b[1]) - float(a[1]) * float(b[0]),
+    ]
+
+
+def _scale3(vec: Sequence[float], scalar: float) -> list[float]:
+    return [float(component) * scalar for component in vec]
+
+
+def _sub3(a: Sequence[float], b: Sequence[float]) -> list[float]:
+    return [float(left) - float(right) for left, right in zip(a, b)]
+
+
+def _norm3(vec: Sequence[float]) -> float:
+    return math.sqrt(_dot3(vec, vec))
+
+
+def _normalize3(vec: Sequence[float]) -> list[float]:
+    magnitude = _norm3(vec)
+    if magnitude <= 1e-12:
+        raise ValueError("Cannot normalize a near-zero vector.")
+    return [float(component) / magnitude for component in vec]
+
+
+def _project_point_to_plane(point: Sequence[float], normal: Sequence[float]) -> tuple[list[float], float]:
+    signed_height = _dot3(point, normal)
+    return _sub3(point, _scale3(normal, signed_height)), signed_height
+
+
+def _ground_plane_basis(up_vector: Sequence[float]) -> tuple[list[float], list[float]]:
+    reference = [1.0, 0.0, 0.0] if abs(float(up_vector[0])) < 0.9 else [0.0, 0.0, 1.0]
+    tangent_u = _normalize3(_cross3(reference, up_vector))
+    tangent_v = _normalize3(_cross3(up_vector, tangent_u))
+    return tangent_u, tangent_v
+
+
+def _to_plane_coordinates(
+    point: Sequence[float],
+    tangent_u: Sequence[float],
+    tangent_v: Sequence[float],
+) -> tuple[float, float]:
+    return (_dot3(point, tangent_u), _dot3(point, tangent_v))
+
+
+def _point_key_2d(point: Sequence[float]) -> tuple[float, float]:
+    return (round(float(point[0]), 12), round(float(point[1]), 12))
+
+
+def _cross2(origin: Sequence[float], a: Sequence[float], b: Sequence[float]) -> float:
+    return (float(a[0]) - float(origin[0])) * (float(b[1]) - float(origin[1])) - (
+        float(a[1]) - float(origin[1])
+    ) * (float(b[0]) - float(origin[0]))
+
+
+def _convex_hull_2d(points: Sequence[Sequence[float]]) -> list[tuple[float, float]]:
+    unique_points = sorted({_point_key_2d(point) for point in points})
+    if len(unique_points) <= 1:
+        return unique_points
+
+    lower: list[tuple[float, float]] = []
+    for point in unique_points:
+        while len(lower) >= 2 and _cross2(lower[-2], lower[-1], point) <= 0.0:
+            lower.pop()
+        lower.append(point)
+
+    upper: list[tuple[float, float]] = []
+    for point in reversed(unique_points):
+        while len(upper) >= 2 and _cross2(upper[-2], upper[-1], point) <= 0.0:
+            upper.pop()
+        upper.append(point)
+
+    return lower[:-1] + upper[:-1]
+
+
+def _distance_point_to_segment_2d(
+    point: Sequence[float],
+    start: Sequence[float],
+    end: Sequence[float],
+) -> float:
+    segment = (float(end[0]) - float(start[0]), float(end[1]) - float(start[1]))
+    segment_length_sq = segment[0] ** 2 + segment[1] ** 2
+    if segment_length_sq <= 1e-12:
+        return math.dist(point, start)
+    projection = (
+        ((float(point[0]) - float(start[0])) * segment[0])
+        + ((float(point[1]) - float(start[1])) * segment[1])
+    ) / segment_length_sq
+    clamped = min(max(projection, 0.0), 1.0)
+    closest = (
+        float(start[0]) + clamped * segment[0],
+        float(start[1]) + clamped * segment[1],
+    )
+    return math.dist(point, closest)
+
+
+def _point_inside_convex_polygon_2d(point: Sequence[float], polygon: Sequence[Sequence[float]]) -> bool:
+    if len(polygon) < 3:
+        return False
+    sign = 0
+    for index, start in enumerate(polygon):
+        end = polygon[(index + 1) % len(polygon)]
+        cross = _cross2(start, end, point)
+        if abs(cross) <= 1e-12:
+            continue
+        current_sign = 1 if cross > 0.0 else -1
+        if sign == 0:
+            sign = current_sign
+            continue
+        if current_sign != sign:
+            return False
+    return True
+
+
+def _distance_outside_support_polygon_2d(
+    point: Sequence[float],
+    polygon: Sequence[Sequence[float]],
+) -> float:
+    if len(polygon) < 3 or _point_inside_convex_polygon_2d(point, polygon):
+        return 0.0
+    return min(
+        _distance_point_to_segment_2d(point, polygon[index], polygon[(index + 1) % len(polygon)])
+        for index in range(len(polygon))
+    )
+
+
 def _resolve_pose_coordinate_names(manifest: ModelManifest, pose: Mapping[str, float]) -> dict[str, float]:
     resolved = {}
     hard_bounds = outer_hard_bounds_from_manifest(manifest)
@@ -635,8 +798,23 @@ def compute_objective_terms(
     pose: Mapping[str, float],
     coordinate_defaults: Mapping[str, float],
     selected_groups: Sequence[str],
+    standing_metrics: StandingMetric | None = None,
 ) -> dict[str, float]:
-    selected_term = sum(group_metrics[group].weighted_normalized_passive_force ** 2 for group in selected_groups)
+    selected_passive_term = sum(
+        group_metrics[group].weighted_normalized_passive_force**2 for group in selected_groups
+    )
+    selected_worst_compartment_term = sum(
+        group_metrics[group].worst_compartment_normalized_passive_force**2 for group in selected_groups
+    )
+    selected_overlength_term = sum(
+        max(0.0, group_metrics[group].mean_normalized_fiber_length - SELECTED_OVERLENGTH_THRESHOLD) ** 2
+        for group in selected_groups
+    )
+    selected_term = (
+        selected_passive_term
+        + SELECTED_WORST_COMPARTMENT_WEIGHT * selected_worst_compartment_term
+        + SELECTED_OVERLENGTH_WEIGHT * selected_overlength_term
+    )
     global_term = sum(metric.weighted_normalized_passive_force ** 2 for metric in group_metrics.values())
     regularization_term = 0.0
     for coordinate_name, weight in REGULARIZATION_WEIGHTS.items():
@@ -644,11 +822,33 @@ def compute_objective_terms(
         delta = coordinate_value - coordinate_defaults[coordinate_name]
         regularization_term += weight * (delta**2)
 
-    total = selected_term + GLOBAL_OBJECTIVE_WEIGHT * global_term + regularization_term
+    standing_support_term = 0.0
+    standing_penetration_term = 0.0
+    standing_heel_lift_term = 0.0
+    if standing_metrics is not None and standing_metrics.gravity_magnitude_m_s2 > 0.0:
+        support_distance = max(
+            0.0,
+            standing_metrics.support_distance_outside_m - STANDING_SUPPORT_MARGIN_M,
+        )
+        standing_support_term = STANDING_SUPPORT_DISTANCE_WEIGHT * (support_distance**2)
+        standing_penetration_term = STANDING_PENETRATION_WEIGHT * (
+            standing_metrics.heel_penetration_m**2 + standing_metrics.toe_penetration_m**2
+        )
+        standing_heel_lift_term = STANDING_HEEL_LIFT_WEIGHT * (standing_metrics.heel_lift_m**2)
+
+    standing_term = standing_support_term + standing_penetration_term + standing_heel_lift_term
+    total = selected_term + GLOBAL_OBJECTIVE_WEIGHT * global_term + regularization_term + standing_term
     return {
+        "selected_passive_term": selected_passive_term,
+        "selected_worst_compartment_term": selected_worst_compartment_term,
+        "selected_overlength_term": selected_overlength_term,
         "selected_term": selected_term,
         "global_term": global_term,
         "regularization_term": regularization_term,
+        "standing_support_term": standing_support_term,
+        "standing_penetration_term": standing_penetration_term,
+        "standing_heel_lift_term": standing_heel_lift_term,
+        "standing_term": standing_term,
         "total": total,
     }
 
@@ -796,6 +996,93 @@ class OpenSimEvaluator:
             }
         return transforms
 
+    def _evaluate_standing_metrics(
+        self,
+        model: Any,
+        state: Any,
+        transforms: Mapping[str, Mapping[str, list[float] | list[list[float]]]],
+    ) -> StandingMetric:
+        gravity_vector = _vec3_to_list(model.getGravity())
+        gravity_magnitude = _norm3(gravity_vector)
+        if gravity_magnitude <= 1e-12:
+            zero_landmarks = {
+                landmark_name: [0.0, 0.0, 0.0] for landmark_name in STANDING_FOOT_LANDMARK_BODIES
+            }
+            return StandingMetric(
+                gravity_vector_m_s2=gravity_vector,
+                gravity_magnitude_m_s2=0.0,
+                center_of_mass_m=[0.0, 0.0, 0.0],
+                projected_center_of_mass_m=[0.0, 0.0, 0.0],
+                foot_landmarks_m=zero_landmarks,
+                projected_foot_landmarks_m=zero_landmarks,
+                support_polygon_m=[],
+                support_distance_outside_m=0.0,
+                heel_penetration_m=0.0,
+                toe_penetration_m=0.0,
+                heel_lift_m=0.0,
+            )
+
+        up_vector = _normalize3([-component for component in gravity_vector])
+        tangent_u, tangent_v = _ground_plane_basis(up_vector)
+        center_of_mass = _vec3_to_list(model.calcMassCenterPosition(state))
+        projected_center_of_mass, _ = _project_point_to_plane(center_of_mass, up_vector)
+        center_of_mass_plane = _to_plane_coordinates(projected_center_of_mass, tangent_u, tangent_v)
+
+        foot_landmarks: dict[str, list[float]] = {}
+        projected_foot_landmarks: dict[str, list[float]] = {}
+        support_points_2d: list[tuple[float, float]] = []
+        support_point_lookup: dict[tuple[float, float], list[float]] = {}
+        landmark_heights: dict[str, float] = {}
+        for landmark_name, body_name in STANDING_FOOT_LANDMARK_BODIES.items():
+            transform = transforms[body_name]
+            landmark = [float(component) for component in transform["translation_m"]]
+            projected_landmark, signed_height = _project_point_to_plane(landmark, up_vector)
+            plane_point = _to_plane_coordinates(projected_landmark, tangent_u, tangent_v)
+            foot_landmarks[landmark_name] = landmark
+            projected_foot_landmarks[landmark_name] = projected_landmark
+            support_points_2d.append(plane_point)
+            support_point_lookup[_point_key_2d(plane_point)] = projected_landmark
+            landmark_heights[landmark_name] = signed_height
+
+        support_polygon_2d = _convex_hull_2d(support_points_2d)
+        support_polygon = [
+            support_point_lookup[_point_key_2d(point)]
+            for point in support_polygon_2d
+            if _point_key_2d(point) in support_point_lookup
+        ]
+        support_distance_outside = _distance_outside_support_polygon_2d(
+            center_of_mass_plane,
+            support_polygon_2d,
+        )
+        heel_penetration = sum(
+            max(0.0, -landmark_heights[landmark_name] - STANDING_GROUND_CLEARANCE_TOLERANCE_M)
+            for landmark_name in ("left_heel", "right_heel")
+        )
+        toe_penetration = sum(
+            max(0.0, -landmark_heights[landmark_name] - STANDING_GROUND_CLEARANCE_TOLERANCE_M)
+            for landmark_name in ("left_toe", "right_toe")
+        )
+        heel_lift = 0.0
+        for side in ("left", "right"):
+            toe_height = landmark_heights[f"{side}_toe"]
+            heel_height = landmark_heights[f"{side}_heel"]
+            if toe_height <= STANDING_TOE_CONTACT_TOLERANCE_M:
+                heel_lift += max(0.0, heel_height - STANDING_HEEL_LIFT_TOLERANCE_M)
+
+        return StandingMetric(
+            gravity_vector_m_s2=gravity_vector,
+            gravity_magnitude_m_s2=gravity_magnitude,
+            center_of_mass_m=center_of_mass,
+            projected_center_of_mass_m=projected_center_of_mass,
+            foot_landmarks_m=foot_landmarks,
+            projected_foot_landmarks_m=projected_foot_landmarks,
+            support_polygon_m=support_polygon,
+            support_distance_outside_m=support_distance_outside,
+            heel_penetration_m=heel_penetration,
+            toe_penetration_m=toe_penetration,
+            heel_lift_m=heel_lift,
+        )
+
     def evaluate_static_pose(self, request: EvaluationRequest) -> dict[str, Any]:
         selected_groups = _resolve_selected_groups(request.selected_groups, self.lower_body_muscle_groups)
 
@@ -810,6 +1097,7 @@ class OpenSimEvaluator:
         lower_body_muscle_metrics = self._read_lower_body_muscle_outputs(model, state)
         group_metrics = self._aggregate_group_outputs(lower_body_muscle_metrics)
         transforms = self._read_segment_transforms(model, state)
+        standing_metrics = self._evaluate_standing_metrics(model, state, transforms)
         debug: dict[str, Any] = {}
         if request.include_upper_body_debug_metrics:
             debug["upper_body_muscle_metrics"] = {
@@ -826,6 +1114,7 @@ class OpenSimEvaluator:
             pose={**self.coordinate_defaults, **applied_pose},
             coordinate_defaults=self.coordinate_defaults,
             selected_groups=selected_groups,
+            standing_metrics=standing_metrics,
         )
 
         return {
@@ -845,6 +1134,7 @@ class OpenSimEvaluator:
             "per_actuator": {name: asdict(metric) for name, metric in lower_body_muscle_metrics.items()},
             "per_group": {name: asdict(metric) for name, metric in group_metrics.items()},
             "objective": objective,
+            "standing": asdict(standing_metrics),
             "segment_transforms": transforms,
             "debug": debug,
         }
